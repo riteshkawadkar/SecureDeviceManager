@@ -1,0 +1,49 @@
+# ── .NET / ASP.NET Core ──────────────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+_ReSharper*/
+*.DotSettings.user
+project.lock.json
+project.fragment.lock.json
+artifacts/
+TestResults/
+*.nupkg
+*.snupkg
+# EF Core migrations do NOT go here — they're source controlled
+# Sensitive config — never commit
+**/appsettings.Production.json
+**/firebase-sa.json
+**/firebase-sa*.json
+
+# ── Android / Gradle ─────────────────────────────────────────────────────────
+*.iml
+.gradle/
+local.properties
+android-agent/.idea/
+android-agent/build/
+android-agent/app/build/
+android-agent/captures/
+android-agent/.externalNativeBuild/
+android-agent/.cxx/
+android-agent/*.apk
+android-agent/*.aab
+# Keystore files — keep out of git
+*.jks
+*.keystore
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+# Keep docker-compose.yml in git; ignore override files with secrets
+docker-compose.override.yml
+
+# ── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+*.orig

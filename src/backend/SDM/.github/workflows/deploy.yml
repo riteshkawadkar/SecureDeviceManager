@@ -1,0 +1,44 @@
+name: Build and Deploy to Ubuntu Docker VM
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: |
+          dotnet restore SDM.slnx
+          dotnet build SDM.slnx --no-restore -c Release
+
+      - name: Deploy via SSH
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key "$SERVER_USER@$SERVER_HOST" "
+            set -e
+            cd ~/SDM
+            git pull origin main
+            docker compose down
+            docker compose build --no-cache api
+            docker compose up -d
+            docker compose logs api --tail=20
+          "

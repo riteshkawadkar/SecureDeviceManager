@@ -1,0 +1,822 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F2F3F7"
+    android:fillViewport="false">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:paddingBottom="32dp">
+
+        <!-- ── App Header ─────────────────────────────────────────── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="20dp"
+            android:layout_marginTop="8dp">
+
+            <FrameLayout
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/app_icon_bg">
+                <ImageView
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_shield"
+                    android:contentDescription="@null"/>
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SDM"
+                    android:textColor="#111827"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Device Management"
+                    android:textSize="13sp"
+                    android:textColor="#6B7280"/>
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/circle_gray_bg">
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_bell"
+                    android:contentDescription="Notifications"/>
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- ── This Device Card ──────────────────────────────────── -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <!-- "This Device" label + enrollment badge -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="14dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="This Device"
+                        android:textSize="12sp"
+                        android:textColor="#6B7280"/>
+
+                    <TextView
+                        android:id="@+id/tvEnrollmentBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="● Not Enrolled"
+                        android:textSize="12sp"
+                        android:textColor="#D97706"
+                        android:background="@drawable/badge_not_enrolled_bg"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"/>
+                </LinearLayout>
+
+                <!-- Device icon + name/subtitle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="14dp">
+
+                    <FrameLayout
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/icon_bg_gray">
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_smartphone"
+                            android:contentDescription="@null"/>
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="12dp">
+                        <TextView
+                            android:id="@+id/tvDeviceName"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Android Device"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:textColor="#111827"/>
+                        <TextView
+                            android:id="@+id/tvDeviceSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Android N/A · Serial: N/A"
+                            android:textSize="12sp"
+                            android:textColor="#9CA3AF"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#F3F4F6"
+                    android:layout_marginBottom="14dp"/>
+
+                <!-- MDM Server + Policy row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="MDM Server"
+                            android:textSize="11sp"
+                            android:textColor="#9CA3AF"
+                            android:layout_marginBottom="2dp"/>
+                        <TextView
+                            android:id="@+id/tvMdmServer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Not connected"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="#374151"/>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Policy"
+                            android:textSize="11sp"
+                            android:textColor="#9CA3AF"
+                            android:layout_marginBottom="2dp"/>
+                        <TextView
+                            android:id="@+id/tvPolicy"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="None assigned"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="#374151"/>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ── Device Details Accordion Card ─────────────────────── -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Tappable header row -->
+                <LinearLayout
+                    android:id="@+id/layoutDeviceDetailsHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="16dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?attr/selectableItemBackground">
+
+                    <FrameLayout
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/icon_bg_gray">
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_smartphone"
+                            android:contentDescription="@null"/>
+                    </FrameLayout>
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Device Details"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="#111827"
+                        android:layout_marginStart="12dp"/>
+
+                    <ImageView
+                        android:id="@+id/ivExpandIcon"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_expand_more"
+                        android:contentDescription="Expand device details"/>
+                </LinearLayout>
+
+                <!-- Expandable detail rows (starts collapsed) -->
+                <LinearLayout
+                    android:id="@+id/layoutDeviceDetailsContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="12dp"
+                    android:visibility="gone">
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#F3F4F6"
+                        android:layout_marginBottom="8dp"/>
+
+                    <!-- Android ID -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Android ID"
+                            android:textSize="12sp"
+                            android:textColor="#9CA3AF"/>
+                        <TextView
+                            android:id="@+id/tvDetailAndroidId"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.4"
+                            android:text="—"
+                            android:textSize="12sp"
+                            android:textColor="#374151"
+                            android:textStyle="bold"
+                            android:gravity="end"
+                            android:ellipsize="end"
+                            android:maxLines="1"/>
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F9FAFB"/>
+
+                    <!-- Manufacturer -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Manufacturer"
+                            android:textSize="12sp"
+                            android:textColor="#9CA3AF"/>
+                        <TextView
+                            android:id="@+id/tvDetailManufacturer"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.4"
+                            android:text="—"
+                            android:textSize="12sp"
+                            android:textColor="#374151"
+                            android:textStyle="bold"
+                            android:gravity="end"/>
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F9FAFB"/>
+
+                    <!-- Model -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Model"
+                            android:textSize="12sp"
+                            android:textColor="#9CA3AF"/>
+                        <TextView
+                            android:id="@+id/tvDetailModel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.4"
+                            android:text="—"
+                            android:textSize="12sp"
+                            android:textColor="#374151"
+                            android:textStyle="bold"
+                            android:gravity="end"/>
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F9FAFB"/>
+
+                    <!-- Android Version -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Android Version"
+                            android:textSize="12sp"
+                            android:textColor="#9CA3AF"/>
+                        <TextView
+                            android:id="@+id/tvDetailAndroidVersion"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.4"
+                            android:text="—"
+                            android:textSize="12sp"
+                            android:textColor="#374151"
+                            android:textStyle="bold"
+                            android:gravity="end"/>
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F9FAFB"/>
+
+                    <!-- Serial -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Serial Number"
+                            android:textSize="12sp"
+                            android:textColor="#9CA3AF"/>
+                        <TextView
+                            android:id="@+id/tvDetailSerial"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.4"
+                            android:text="—"
+                            android:textSize="12sp"
+                            android:textColor="#374151"
+                            android:textStyle="bold"
+                            android:gravity="end"/>
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F9FAFB"/>
+
+                    <!-- Enrolled Device ID (from backend) -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Device ID"
+                            android:textSize="12sp"
+                            android:textColor="#9CA3AF"/>
+                        <TextView
+                            android:id="@+id/tvDetailDeviceId"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.4"
+                            android:text="Not enrolled"
+                            android:textSize="12sp"
+                            android:textColor="#374151"
+                            android:textStyle="bold"
+                            android:gravity="end"
+                            android:ellipsize="end"
+                            android:maxLines="1"/>
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ── Device Admin Card (hidden when admin already granted) ── -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardAdminSetup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="16dp">
+
+                    <FrameLayout
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/icon_bg_blue">
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield_check"
+                            android:contentDescription="@null"/>
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="12dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Enable Device Admin"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:textColor="#111827"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Required before enrollment. Grants MDM control over security policies and remote wipe."
+                            android:textSize="12sp"
+                            android:textColor="#6B7280"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRequestAdmin"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Enable Device Admin"
+                    android:textAllCaps="false"
+                    android:textSize="14sp"
+                    app:backgroundTint="#1A73E8"
+                    style="@style/Widget.MaterialComponents.Button"/>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Permission provided indicator (shown when admin IS granted) -->
+        <LinearLayout
+            android:id="@+id/layoutAdminGranted"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/badge_enrolled_bg"
+            android:padding="14dp"
+            android:layout_marginBottom="12dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_check_circle"
+                android:layout_marginEnd="10dp"
+                android:contentDescription="@null"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Device Admin permission granted"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#166534"/>
+        </LinearLayout>
+
+        <!-- ── Enroll Device Card ─────────────────────────────────── -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardEnrollDevice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="14dp">
+
+                    <FrameLayout
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/icon_bg_blue">
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_qr_code"
+                            android:contentDescription="@null"/>
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="12dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Enroll Device"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:textColor="#111827"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Scan the QR code provided by your IT administrator to enroll this device."
+                            android:textSize="12sp"
+                            android:textColor="#6B7280"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnScanQr"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Open Camera to Scan QR"
+                    android:textAllCaps="false"
+                    android:textSize="14sp"
+                    app:backgroundTint="#1A73E8"
+                    app:icon="@drawable/ic_camera"
+                    app:iconGravity="textStart"
+                    app:iconTint="#FFFFFF"
+                    android:layout_marginBottom="14dp"
+                    style="@style/Widget.MaterialComponents.Button"/>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="or enter code manually"
+                    android:textSize="12sp"
+                    android:textColor="#9CA3AF"
+                    android:gravity="center"
+                    android:layout_marginBottom="10dp"/>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilEnrollmentToken"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Enter enrollment token"
+                    app:startIconDrawable="@drawable/ic_key"
+                    app:startIconTint="#9CA3AF"
+                    app:endIconMode="custom"
+                    app:endIconDrawable="@drawable/ic_arrow_forward"
+                    app:endIconContentDescription="Enroll"
+                    app:boxCornerRadiusTopStart="10dp"
+                    app:boxCornerRadiusTopEnd="10dp"
+                    app:boxCornerRadiusBottomStart="10dp"
+                    app:boxCornerRadiusBottomEnd="10dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etEnrollmentToken"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionDone"
+                        android:inputType="textNoSuggestions"
+                        android:singleLine="true"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Enrolled indicator (shown when device IS enrolled) -->
+        <LinearLayout
+            android:id="@+id/layoutEnrolled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/badge_enrolled_bg"
+            android:padding="14dp"
+            android:layout_marginBottom="12dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_check_circle"
+                android:layout_marginEnd="10dp"
+                android:contentDescription="@null"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Device enrolled successfully"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#166534"/>
+
+            <TextView
+                android:id="@+id/tvViewPolicies"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="View policies →"
+                android:textSize="12sp"
+                android:textColor="#1A73E8"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground"
+                android:paddingStart="6dp"
+                android:paddingEnd="2dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"/>
+        </LinearLayout>
+
+        <!-- ── Unenroll Card ──────────────────────────────────────── -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="16dp">
+
+                    <FrameLayout
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/icon_bg_red">
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_link_off"
+                            android:contentDescription="@null"/>
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="12dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Unenroll Device"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:textColor="#111827"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Remove this device from the MDM server. Corporate policies and apps will be removed."
+                            android:textSize="12sp"
+                            android:textColor="#6B7280"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnUnenroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Unenroll This Device"
+                    android:textAllCaps="false"
+                    android:textSize="14sp"
+                    android:textColor="#DC2626"
+                    app:strokeColor="#DC2626"
+                    app:strokeWidth="1.5dp"
+                    app:backgroundTint="@android:color/transparent"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ── Footer ────────────────────────────────────────────── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_help"
+                android:alpha="0.6"
+                android:layout_marginEnd="5dp"
+                android:contentDescription="@null"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Contact IT support at "
+                android:textSize="12sp"
+                android:textColor="#9CA3AF"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="admin@therightstack.io"
+                android:textColor="#1A73E8"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
