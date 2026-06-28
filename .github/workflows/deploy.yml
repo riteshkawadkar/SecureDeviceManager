@@ -2,11 +2,16 @@ name: Build and Deploy to Ubuntu Docker VM
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
+    paths:
+      - 'src/backend/**'
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend/SDM
 
     steps:
       - name: Checkout
@@ -35,8 +40,9 @@ jobs:
 
           ssh -i ~/.ssh/deploy_key "$SERVER_USER@$SERVER_HOST" "
             set -e
-            cd ~/SDM
-            git pull origin main
+            cd ~/SecureDeviceManager
+            git pull origin master
+            cd src/backend/SDM
             docker compose down
             docker compose build --no-cache api
             docker compose up -d
