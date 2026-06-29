@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import {
   Download, Mail, Check, Smartphone, Shield,
-  Package, Info, ChevronLeft, Hash, Zap, QrCode, Clock, Loader2,
+  Package, Info, ChevronLeft, Hash, Zap, QrCode, Clock, Loader2, Copy,
 } from 'lucide-react';
 import { createToken } from '../../api/enrollment';
 import { listDevices } from '../../api/devices';
@@ -28,6 +28,7 @@ export default function EnrollDevicePage() {
   const [tokenData, setTokenData] = useState<{ token: string; expiresOn: string } | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [connectedDevice, setConnectedDevice] = useState<{ id: string; identifier: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const qrContainerRef = useRef<HTMLDivElement>(null);
   const tokenCreatedAtRef = useRef<Date | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -61,7 +62,16 @@ export default function EnrollDevicePage() {
     };
   }, [isPolling]);
 
-  async function handleGenerateQr() {
+  function handleMethodChange(m: EnrollMethod) {
+    setMethod(m);
+    setTokenData(null);
+    setConnectedDevice(null);
+    setCopied(false);
+    setIsPolling(false);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+  }
+
+  async function handleGenerate() {
     setIsGenerating(true);
     setConnectedDevice(null);
     try {
@@ -82,6 +92,13 @@ export default function EnrollDevicePage() {
     a.href = url;
     a.download = 'enrollment-qr.png';
     a.click();
+  }
+
+  function handleCopyToken() {
+    if (!tokenData) return;
+    navigator.clipboard.writeText(tokenData.token);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -136,9 +153,10 @@ export default function EnrollDevicePage() {
           <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 flex gap-3">
             <Info size={15} className="text-blue-600 shrink-0 mt-0.5" />
             <p className="text-sm text-blue-800 leading-relaxed">
-              <span className="font-semibold">How it works:</span> Generate a QR code and scan it during
-              Android device setup. The MDM agent automatically captures device details (model, IMEI, OS
-              version) on first check-in — no manual entry needed.
+              <span className="font-semibold">How it works:</span>{' '}
+              {method === 'qr'
+                ? 'Generate a QR code and scan it during Android device setup. The MDM agent automatically captures device details (model, IMEI, OS version) on first check-in — no manual entry needed.'
+                : 'Generate a token and share it with the user. They paste it into the SDM companion app to register the device. The agent handles the rest automatically.'}
             </p>
           </div>
 
@@ -154,7 +172,7 @@ export default function EnrollDevicePage() {
               {/* QR Code — selectable */}
               <MethodCard
                 selected={method === 'qr'}
-                onSelect={() => setMethod('qr')}
+                onSelect={() => handleMethodChange('qr')}
                 icon={
                   <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -172,11 +190,16 @@ export default function EnrollDevicePage() {
                 description="Generate a QR code the user scans during initial Android device setup (factory reset or new device)."
               />
 
-              {/* Token — coming soon */}
-              <ComingSoonMethodCard
-                icon={<Hash size={18} className="text-gray-400" />}
+              {/* Token — active */}
+              <MethodCard
+                selected={method === 'token'}
+                onSelect={() => handleMethodChange('token')}
+                icon={<Hash size={18} className="text-purple-600" />}
+                iconBg="bg-purple-50"
+                badge="Manual"
+                badgeClass="text-purple-600 bg-purple-50"
                 title="Enrollment Token"
-                description="Share a token the user enters in the MDM companion app to register the device."
+                description="Share a token the user pastes into the MDM companion app to register the device."
               />
 
               {/* Zero-Touch — coming soon */}
@@ -230,68 +253,125 @@ export default function EnrollDevicePage() {
 
         {/* ── Right Panel ── */}
         <div className="space-y-4">
-          {/* QR Code */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-800 text-center mb-4">Enrollment QR Code</h3>
+          {method === 'qr' ? (
+            /* QR Code Panel */
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <h3 className="text-sm font-semibold text-gray-800 text-center mb-4">Enrollment QR Code</h3>
 
-            <div ref={qrContainerRef} className="flex justify-center mb-4">
-              {qrValue ? (
-                <QRCodeCanvas value={qrValue} size={160} level="Q" marginSize={2} />
+              <div ref={qrContainerRef} className="flex justify-center mb-4">
+                {qrValue ? (
+                  <QRCodeCanvas value={qrValue} size={160} level="Q" marginSize={2} />
+                ) : (
+                  <div className="w-40 h-40 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2">
+                    <QrCode size={28} className="text-gray-300" />
+                    <p className="text-xs text-gray-400 text-center px-3 leading-relaxed">
+                      Click below to generate
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-400 text-center mb-4">
+                Scan during Android setup wizard or via the MDM Companion app.
+              </p>
+
+              {tokenData ? (
+                <button
+                  onClick={handleDownloadQr}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Download size={14} />
+                  Download QR
+                </button>
               ) : (
-                <div className="w-40 h-40 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2">
-                  <QrCode size={28} className="text-gray-300" />
-                  <p className="text-xs text-gray-400 text-center px-3 leading-relaxed">
-                    Click below to generate
-                  </p>
-                </div>
+                <button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                >
+                  <QrCode size={14} />
+                  {isGenerating ? 'Generating...' : 'Generate QR Code'}
+                </button>
+              )}
+
+              <div className="mt-2">
+                <button
+                  disabled
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-400 text-sm font-medium rounded-lg cursor-not-allowed"
+                >
+                  <Mail size={14} />
+                  Send via Email
+                  <span className="ml-1 text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                    Soon
+                  </span>
+                </button>
+              </div>
+
+              {tokenData && (
+                <p className="text-xs text-gray-400 text-center mt-3">
+                  Token expires {new Date(tokenData.expiresOn).toLocaleString()}
+                </p>
               )}
             </div>
+          ) : (
+            /* Enrollment Token Panel */
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <h3 className="text-sm font-semibold text-gray-800 text-center mb-4">Enrollment Token</h3>
 
-            <p className="text-xs text-gray-400 text-center mb-4">
-              Scan during Android setup wizard or via the MDM Companion app.
-            </p>
-
-            {/* Generate / Download — dual-purpose button */}
-            {tokenData ? (
-              <button
-                onClick={handleDownloadQr}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Download size={14} />
-                Download QR
-              </button>
-            ) : (
-              <button
-                onClick={handleGenerateQr}
-                disabled={isGenerating}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
-              >
-                <QrCode size={14} />
-                {isGenerating ? 'Generating...' : 'Generate QR Code'}
-              </button>
-            )}
-
-            {/* Send via Email — coming soon */}
-            <div className="mt-2 relative">
-              <button
-                disabled
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-400 text-sm font-medium rounded-lg cursor-not-allowed"
-              >
-                <Mail size={14} />
-                Send via Email
-                <span className="ml-1 text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                  Soon
-                </span>
-              </button>
+              {tokenData ? (
+                <>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                    <p className="text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wide">Token</p>
+                    <p className="font-mono text-xs text-gray-800 break-all leading-relaxed select-all">
+                      {tokenData.token}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCopyToken}
+                    className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${
+                      copied
+                        ? 'bg-green-600 text-white'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? 'Copied!' : 'Copy Token'}
+                  </button>
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
+                    className="w-full mt-2 inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
+                  >
+                    <Hash size={14} />
+                    {isGenerating ? 'Generating...' : 'Regenerate'}
+                  </button>
+                  <p className="text-xs text-gray-400 text-center mt-3">
+                    Token expires {new Date(tokenData.expiresOn).toLocaleString()}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="w-full h-28 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 mb-4">
+                    <Hash size={26} className="text-gray-300" />
+                    <p className="text-xs text-gray-400 text-center px-4 leading-relaxed">
+                      Click below to generate a token
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60"
+                  >
+                    {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Hash size={14} />}
+                    {isGenerating ? 'Generating...' : 'Generate Token'}
+                  </button>
+                  <p className="text-xs text-gray-400 text-center mt-3 leading-relaxed">
+                    Share the token with the user — they paste it in the MDM companion app.
+                  </p>
+                </>
+              )}
             </div>
-
-            {/* Token expiry note */}
-            {tokenData && (
-              <p className="text-xs text-gray-400 text-center mt-3">
-                Token expires {new Date(tokenData.expiresOn).toLocaleString()}
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Awaiting Connection — live polling after QR is generated */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
@@ -320,8 +400,10 @@ export default function EnrollDevicePage() {
                 </div>
                 <p className="text-sm font-semibold text-gray-800 mb-1">Waiting for Device</p>
                 <p className="text-xs text-gray-400 leading-relaxed mb-3">
-                  Scan the QR code on your Android device. This panel will update automatically when the
-                  device checks in.
+                  {method === 'qr'
+                    ? 'Scan the QR code on your Android device.'
+                    : 'Paste the token into the MDM companion app on the device.'}{' '}
+                  This panel will update automatically when the device checks in.
                 </p>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
@@ -335,7 +417,9 @@ export default function EnrollDevicePage() {
                 </div>
                 <p className="text-sm font-semibold text-gray-800 mb-1">Awaiting Device Connection</p>
                 <p className="text-xs text-gray-400 leading-relaxed mb-3">
-                  Generate the QR code above, then scan it on your Android device during setup.
+                  {method === 'qr'
+                    ? 'Generate the QR code above, then scan it on your Android device during setup.'
+                    : 'Generate the token above, then paste it in the MDM companion app on the device.'}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
