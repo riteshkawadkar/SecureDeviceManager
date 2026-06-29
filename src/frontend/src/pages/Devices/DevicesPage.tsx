@@ -60,9 +60,11 @@ export default function DevicesPage() {
     pageSize,
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['devices', params],
     queryFn: () => listDevices(params),
+    refetchInterval: 60_000,          // re-fetch every 60 s while tab is active
+    refetchIntervalInBackground: false, // pause when tab is hidden
   });
 
   const isPagedResult = (d: unknown): d is PagedResult<Device> =>
@@ -236,11 +238,18 @@ export default function DevicesPage() {
         </div>
 
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-          <p className="text-xs text-gray-500">
-            {total === 0
-              ? 'No results'
-              : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total} devices`}
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-gray-500">
+              {total === 0
+                ? 'No results'
+                : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total} devices`}
+            </p>
+            {dataUpdatedAt > 0 && (
+              <p className="text-xs text-gray-400">
+                Updated {new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </p>
+            )}
+          </div>
           <Pagination page={page} pageSize={pageSize} total={total} onChange={setPage} />
         </div>
       </div>

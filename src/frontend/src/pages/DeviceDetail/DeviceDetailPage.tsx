@@ -14,6 +14,8 @@ export default function DeviceDetailPage() {
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', id],
     queryFn: () => getDevice(id!),
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
   const { data: violations } = useQuery({
     queryKey: ['violations', id],

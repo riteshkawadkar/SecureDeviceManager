@@ -3,9 +3,17 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { X, Search, ChevronDown } from 'lucide-react';
 import { listDevices, sendCommand } from '../../api/devices';
 import { listPolicies } from '../../api/policies';
-import { ComplianceBadge, OnlineBadge } from '../../components/ui/StatusBadge';
+import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import type { Device, PagedResult } from '../../types/device';
-import { DeviceStatus, ComplianceStatus } from '../../types/device';
+import { ComplianceStatus } from '../../types/device';
+
+function getLiveStatus(lastSeen: string | null): 'online' | 'offline' | 'inactive' | 'never' {
+  if (!lastSeen) return 'never';
+  const mins = (Date.now() - new Date(lastSeen).getTime()) / 60000;
+  if (mins < 5) return 'online';
+  if (mins < 1440) return 'offline';
+  return 'inactive';
+}
 
 const DEVICE_COMMANDS = [
   { type: 'LockDevice',  label: 'Remote Lock',    desc: 'Instantly lock device screen' },
@@ -25,6 +33,8 @@ export default function RemoteActionsPage() {
   const { data: rawDevices } = useQuery({
     queryKey: ['devices-all'],
     queryFn: () => listDevices({ pageSize: 200 }),
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: policies = [] } = useQuery({
@@ -45,7 +55,7 @@ export default function RemoteActionsPage() {
       || d.deviceIdentifier.toLowerCase().includes(q)
       || (d.model ?? '').toLowerCase().includes(q)
       || (d.assignedUserName ?? '').toLowerCase().includes(q);
-    const matchStatus     = !statusFilter     || String(d.status)            === statusFilter;
+    const matchStatus     = !statusFilter     || getLiveStatus(d.lastSeen)    === statusFilter;
     const matchCompliance = !complianceFilter || String(d.complianceStatus)  === complianceFilter;
     return matchSearch && matchStatus && matchCompliance;
   }), [allDevices, search, statusFilter, complianceFilter]);
@@ -153,9 +163,10 @@ export default function RemoteActionsPage() {
                 className="appearance-none pl-3 pr-7 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-w-[130px]"
               >
                 <option value="">All Status</option>
-                <option value="1">Online</option>
-                <option value="0">Offline</option>
-                <option value="2">Inactive</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+                <option value="inactive">Inactive</option>
+                <option value="never">Never seen</option>
               </select>
               <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
@@ -179,13 +190,13 @@ export default function RemoteActionsPage() {
           <div className="flex flex-wrap gap-2">
             <span className="text-xs text-gray-400 self-center">Quick select:</span>
             <button
-              onClick={() => quickSelect((d) => d.status === DeviceStatus.Online)}
+              onClick={() => quickSelect((d) => getLiveStatus(d.lastSeen) === 'online')}
               className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
               Online devices
             </button>
             <button
-              onClick={() => quickSelect((d) => d.status === DeviceStatus.Offline)}
+              onClick={() => quickSelect((d) => getLiveStatus(d.lastSeen) === 'offline')}
               className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
               Offline devices
@@ -250,7 +261,7 @@ export default function RemoteActionsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-sm">{d.assignedUserName ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs font-mono">{d.androidVersion}</td>
-                    <td className="px-4 py-3"><OnlineBadge status={d.status} /></td>
+                    <td className="px-4 py-3"><LiveStatusBadge lastSeen={d.lastSeen} /></td>
                     <td className="px-4 py-3"><ComplianceBadge status={d.complianceStatus} /></td>
                   </tr>
                 ))
