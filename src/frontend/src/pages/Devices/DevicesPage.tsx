@@ -124,6 +124,31 @@ export default function DevicesPage() {
         />
       </div>
 
+      {/* Status legend */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 bg-blue-50/60 border border-blue-100 rounded-lg text-xs text-gray-600">
+        <span className="font-semibold text-gray-500 uppercase tracking-wide text-[11px]">Status guide</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          <span className="font-medium text-green-700">Online</span>
+          <span className="text-gray-400">— checked in within the last 5 min</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+          <span className="font-medium text-gray-600">Offline</span>
+          <span className="text-gray-400">— last seen 5 min – 24 h ago</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+          <span className="font-medium text-yellow-700">Inactive</span>
+          <span className="text-gray-400">— no contact for more than 24 h</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+          <span className="font-medium text-gray-500">Never</span>
+          <span className="text-gray-400">— enrolled but never sent a heartbeat</span>
+        </span>
+      </div>
+
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
