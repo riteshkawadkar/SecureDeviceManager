@@ -1,21 +1,56 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Download, Plus, MoreHorizontal } from 'lucide-react';
-import { listDevices } from '../../api/devices';
-import { ComplianceBadge, OnlineBadge } from '../../components/ui/StatusBadge';
+import { Download, Plus, MoreHorizontal, Eye, Trash2 } from 'lucide-react';
+import { listDevices, deleteDevice } from '../../api/devices';
+import { ComplianceBadge } from '../../components/ui/StatusBadge';
 import Pagination from '../../components/ui/Pagination';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 import type { Device, PagedResult } from '../../types/device';
 
 export default function DevicesPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [statusFilter, setStatusFilter] = useState('');
   const [osFilter, setOsFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const pageSize = 10;
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteDevice,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+  });
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (!(e.target as Element).closest('[data-action-menu]')) setOpenMenuId(null);
+    }
+    function onScroll() { setOpenMenuId(null); }
+    document.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, []);
+
+  function openMenu(id: string, e: React.MouseEvent<HTMLButtonElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setOpenMenuId(id);
+  }
+
+  function handleDelete(id: string) {
+    if (confirm('Remove this device from management? This cannot be undone.')) {
+      deleteMutation.mutate(id);
+      setOpenMenuId(null);
+    }
+  }
 
   const params = {
     search: search || undefined,
@@ -38,6 +73,7 @@ export default function DevicesPage() {
 
   return (
     <div className="space-y-5">
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Devices</h1>
@@ -104,7 +140,7 @@ export default function DevicesPage() {
                   OS
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Online
+                  Status
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Compliance
@@ -153,12 +189,18 @@ export default function DevicesPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600 text-sm">{device.assignedUserName ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs font-mono">{device.androidVersion}</td>
-                  <td className="px-4 py-3"><OnlineBadge status={device.status} /></td>
+                  <td className="px-4 py-3"><LiveStatusBadge lastSeen={device.lastSeen} /></td>
                   <td className="px-4 py-3"><ComplianceBadge status={device.complianceStatus} /></td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{formatRelativeTime(device.lastSeen)}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs" title={device.lastSeen ? new Date(device.lastSeen).toLocaleString() : undefined}>
+                    {formatRelativeTime(device.lastSeen)}
+                  </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(device.createdOn)}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <button className="p-1.5 hover:bg-gray-100 rounded-md transition-colors">
+                    <button
+                      data-action-menu={device.id}
+                      onClick={(e) => openMenu(device.id, e)}
+                      className={`p-1.5 rounded-md transition-colors ${openMenuId === device.id ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
+                    >
                       <MoreHorizontal size={15} className="text-gray-400" />
                     </button>
                   </td>
@@ -177,6 +219,67 @@ export default function DevicesPage() {
           <Pagination page={page} pageSize={pageSize} total={total} onChange={setPage} />
         </div>
       </div>
+
+      {/* Portal dropdown — rendered into document.body to escape overflow-x-auto */}
+      {openMenuId && menuPos && createPortal(
+        <div
+          data-action-menu={openMenuId}
+          style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
+          className="w-44 bg-white rounded-lg border border-gray-100 shadow-xl py-1"
+        >
+          <button
+            onClick={() => { navigate(`/devices/${openMenuId}`); setOpenMenuId(null); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Eye size={14} className="text-gray-400" />
+            View Details
+          </button>
+          <div className="my-1 border-t border-gray-100" />
+          <button
+            onClick={() => handleDelete(openMenuId)}
+            disabled={deleteMutation.isPending}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            <Trash2 size={14} />
+            Remove Device
+          </button>
+        </div>,
+        document.body,
+      )}
     </div>
+  );
+}
+
+function LiveStatusBadge({ lastSeen }: { lastSeen: string | null }) {
+  if (!lastSeen) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+        Never
+      </span>
+    );
+  }
+  const mins = (Date.now() - new Date(lastSeen).getTime()) / 60000;
+  if (mins < 5) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+        Online
+      </span>
+    );
+  }
+  if (mins < 1440) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+        Offline
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+      Inactive
+    </span>
   );
 }

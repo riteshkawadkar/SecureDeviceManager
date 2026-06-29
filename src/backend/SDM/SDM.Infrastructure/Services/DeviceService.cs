@@ -77,6 +77,7 @@ namespace SDM.Infrastructure.Services
 
             device.BatteryLevel = request.Battery;
             device.LastSeen = DateTime.UtcNow;
+            device.Status = DeviceStatus.Online;
             device.UpdatedOn = DateTime.UtcNow;
 
             var hb = new DeviceHeartbeat
