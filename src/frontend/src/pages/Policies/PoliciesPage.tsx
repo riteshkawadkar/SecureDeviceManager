@@ -59,13 +59,44 @@ function StatCard({ title, value, subtitle, subtitleCls = 'text-gray-400', icon 
   );
 }
 
+/* ── Command type options per category ──────────────────────────────────────── */
+const COMMAND_OPTIONS: Record<string, { label: string; value: string }[]> = {
+  Security: [
+    { label: 'Disable Camera', value: 'DisableCamera' },
+    { label: 'Enable Camera', value: 'EnableCamera' },
+    { label: 'Lock Screen', value: 'LockScreen' },
+    { label: 'Set Password Policy', value: 'SetPasswordPolicy' },
+  ],
+  DeviceFeatures: [
+    { label: 'Disable Camera', value: 'DisableCamera' },
+    { label: 'Enable Camera', value: 'EnableCamera' },
+    { label: 'Block USB', value: 'BlockUsb' },
+    { label: 'Unblock USB', value: 'UnblockUsb' },
+  ],
+  Network: [
+    { label: 'Disable Wi-Fi', value: 'DisableWifi' },
+    { label: 'Enable Wi-Fi', value: 'EnableWifi' },
+    { label: 'Disable Bluetooth', value: 'DisableBluetooth' },
+    { label: 'Enable Bluetooth', value: 'EnableBluetooth' },
+  ],
+  AppManagement: [
+    { label: 'Disable App Install', value: 'DisableAppInstall' },
+    { label: 'Enable App Install', value: 'EnableAppInstall' },
+    { label: 'Enable Kiosk', value: 'EnableKiosk' },
+    { label: 'Disable Kiosk', value: 'DisableKiosk' },
+  ],
+  WebFiltering: [
+    { label: 'Set Web Restrictions', value: 'SetWebRestrictions' },
+  ],
+};
+
 /* ── Create Policy Modal ────────────────────────────────────────────────────── */
 const CATEGORIES = ['Security', 'AppManagement', 'WebFiltering', 'DLP', 'Compliance', 'Network', 'DeviceFeatures'];
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical'];
 
 interface CreateModalProps {
   onClose: () => void;
-  onSave: (data: { name: string; category: string; severity: string; isEnabled: boolean; policyJson: string }) => void;
+  onSave: (data: { name: string; category: string; severity: string; isEnabled: boolean; policyJson: string; commandType: string }) => void;
   isSaving: boolean;
 }
 
@@ -74,11 +105,20 @@ function CreatePolicyModal({ onClose, onSave, isSaving }: CreateModalProps) {
   const [category, setCategory] = useState('Security');
   const [severity, setSeverity] = useState('Medium');
   const [enabled, setEnabled] = useState(true);
+  const [commandType, setCommandType] = useState('DisableCamera');
+
+  const commandOptions = COMMAND_OPTIONS[category] ?? [];
+
+  const handleCategoryChange = (newCategory: string) => {
+    setCategory(newCategory);
+    const opts = COMMAND_OPTIONS[newCategory] ?? [];
+    setCommandType(opts[0]?.value ?? '');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave({ name: name.trim(), category, severity, isEnabled: enabled, policyJson: '{}' });
+    onSave({ name: name.trim(), category, severity, isEnabled: enabled, policyJson: '{}', commandType });
   };
 
   return (
@@ -117,7 +157,7 @@ function CreatePolicyModal({ onClose, onSave, isSaving }: CreateModalProps) {
                 id="policy-category"
                 name="category"
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
               >
                 {CATEGORIES.map((c) => (
@@ -144,6 +184,25 @@ function CreatePolicyModal({ onClose, onSave, isSaving }: CreateModalProps) {
               </select>
             </div>
           </div>
+          {commandOptions.length > 0 && (
+            <div>
+              <label htmlFor="policy-command" className="block text-xs font-medium text-gray-600 mb-1">
+                Command
+              </label>
+              <select
+                id="policy-command"
+                name="commandType"
+                value={commandType}
+                onChange={(e) => setCommandType(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+              >
+                {commandOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">This command will be dispatched to devices when you enforce the policy.</p>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <input
               id="policy-enabled"

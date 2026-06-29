@@ -5,6 +5,7 @@ export interface Policy {
   isEnabled: boolean;
   category: string;
   severity: string;
+  commandType: string;
   createdOn: string;
 }
 
@@ -14,6 +15,7 @@ export interface CreatePolicyRequest {
   isEnabled: boolean;
   category: string;
   severity: string;
+  commandType: string;
 }
 
 export interface UpdatePolicyRequest {
@@ -21,4 +23,10 @@ export interface UpdatePolicyRequest {
   policyJson: string;
   category: string;
   severity: string;
+  commandType: string;
+}
+
+export interface PolicyEnforceResult {
+  totalDevices: number;
+  commandsSent: number;
 }

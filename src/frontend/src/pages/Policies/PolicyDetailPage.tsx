@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Info, Pencil, Trash2, Shield, Clock, CheckCircle, Tablet,
+  ArrowLeft, Info, Pencil, Trash2, Shield, Clock, CheckCircle, Tablet, Globe, X, Play, Camera,
 } from 'lucide-react';
-import { getPolicy, updatePolicy, deletePolicy, togglePolicy } from '../../api/policies';
-import type { Policy, UpdatePolicyRequest } from '../../types/policy';
+import { getPolicy, updatePolicy, deletePolicy, togglePolicy, enforcePolicy } from '../../api/policies';
+import type { Policy, UpdatePolicyRequest, PolicyEnforceResult } from '../../types/policy';
 
 /* ── Shared badge helpers (mirrors PoliciesPage) ───────────────────────────── */
 const TYPE_META: Record<string, { label: string; cls: string }> = {
@@ -96,6 +96,35 @@ function DeleteModal({ name, onCancel, onConfirm, isDeleting }: {
 /* ── Edit modal ─────────────────────────────────────────────────────────────── */
 const CATEGORIES = ['Security', 'AppManagement', 'WebFiltering', 'DLP', 'Compliance', 'Network', 'DeviceFeatures'];
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical'];
+const COMMAND_OPTIONS: Record<string, { label: string; value: string }[]> = {
+  Security: [
+    { label: 'Disable Camera', value: 'DisableCamera' },
+    { label: 'Enable Camera', value: 'EnableCamera' },
+    { label: 'Lock Screen', value: 'LockScreen' },
+    { label: 'Set Password Policy', value: 'SetPasswordPolicy' },
+  ],
+  DeviceFeatures: [
+    { label: 'Disable Camera', value: 'DisableCamera' },
+    { label: 'Enable Camera', value: 'EnableCamera' },
+    { label: 'Block USB', value: 'BlockUsb' },
+    { label: 'Unblock USB', value: 'UnblockUsb' },
+  ],
+  Network: [
+    { label: 'Disable Wi-Fi', value: 'DisableWifi' },
+    { label: 'Enable Wi-Fi', value: 'EnableWifi' },
+    { label: 'Disable Bluetooth', value: 'DisableBluetooth' },
+    { label: 'Enable Bluetooth', value: 'EnableBluetooth' },
+  ],
+  AppManagement: [
+    { label: 'Disable App Install', value: 'DisableAppInstall' },
+    { label: 'Enable App Install', value: 'EnableAppInstall' },
+    { label: 'Enable Kiosk', value: 'EnableKiosk' },
+    { label: 'Disable Kiosk', value: 'DisableKiosk' },
+  ],
+  WebFiltering: [
+    { label: 'Set Web Restrictions', value: 'SetWebRestrictions' },
+  ],
+};
 
 function EditModal({ policy, onClose, onSave, isSaving }: {
   policy: Policy; onClose: () => void;
@@ -104,10 +133,19 @@ function EditModal({ policy, onClose, onSave, isSaving }: {
   const [name, setName] = useState(policy.name);
   const [category, setCategory] = useState(policy.category);
   const [severity, setSeverity] = useState(policy.severity);
+  const [commandType, setCommandType] = useState(policy.commandType ?? '');
+
+  const commandOptions = COMMAND_OPTIONS[category] ?? [];
+
+  const handleCategoryChange = (newCategory: string) => {
+    setCategory(newCategory);
+    const opts = COMMAND_OPTIONS[newCategory] ?? [];
+    setCommandType(opts[0]?.value ?? '');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ name: name.trim(), category, severity, policyJson: policy.policyJson });
+    onSave({ name: name.trim(), category, severity, policyJson: policy.policyJson, commandType });
   };
 
   return (
@@ -131,7 +169,7 @@ function EditModal({ policy, onClose, onSave, isSaving }: {
               <label htmlFor="edit-category" className="block text-xs font-medium text-gray-600 mb-1">Type</label>
               <select
                 id="edit-category" name="category" value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
               >
                 {CATEGORIES.map((c) => <option key={c} value={c}>{TYPE_META[c]?.label ?? c}</option>)}
@@ -148,6 +186,21 @@ function EditModal({ policy, onClose, onSave, isSaving }: {
               </select>
             </div>
           </div>
+          {commandOptions.length > 0 && (
+            <div>
+              <label htmlFor="edit-command" className="block text-xs font-medium text-gray-600 mb-1">Command</label>
+              <select
+                id="edit-command" name="commandType" value={commandType}
+                onChange={(e) => setCommandType(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+              >
+                <option value="">— None —</option>
+                {commandOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button" onClick={onClose}
@@ -166,7 +219,7 @@ function EditModal({ policy, onClose, onSave, isSaving }: {
   );
 }
 
-/* ── PolicyJson renderer ────────────────────────────────────────────────────── */
+/* ── PolicyJson renderer (generic fallback) ─────────────────────────────────── */
 function PolicySettings({ policyJson }: { policyJson: string }) {
   let parsed: Record<string, unknown> = {};
   try { parsed = JSON.parse(policyJson); } catch { /* ignore */ }
@@ -210,6 +263,258 @@ function PolicySettings({ policyJson }: { policyJson: string }) {
   );
 }
 
+/* ── Helpers ────────────────────────────────────────────────────────────────── */
+function parsePolicyJson(json: string): Record<string, unknown> {
+  try { return JSON.parse(json) as Record<string, unknown>; } catch { return {}; }
+}
+
+function getPolicyType(policy: Policy): string {
+  const p = parsePolicyJson(policy.policyJson);
+  return typeof p.type === 'string' ? p.type : '';
+}
+
+/* ── Website Restrictions inline editor ─────────────────────────────────────── */
+function WebRestrictionSettings({ policy, onSave, isSaving }: {
+  policy: Policy;
+  onSave: (policyJson: string) => void;
+  isSaving: boolean;
+}) {
+  const [blockedUrls, setBlockedUrls] = useState<string[]>(() => {
+    const p = parsePolicyJson(policy.policyJson);
+    return Array.isArray(p.blockedUrls) ? (p.blockedUrls as string[]) : [];
+  });
+  const [allowedUrls, setAllowedUrls] = useState<string[]>(() => {
+    const p = parsePolicyJson(policy.policyJson);
+    return Array.isArray(p.allowedUrls) ? (p.allowedUrls as string[]) : [];
+  });
+  const [newBlocked, setNewBlocked] = useState('');
+  const [newAllowed, setNewAllowed] = useState('');
+
+  useEffect(() => {
+    const p = parsePolicyJson(policy.policyJson);
+    setBlockedUrls(Array.isArray(p.blockedUrls) ? (p.blockedUrls as string[]) : []);
+    setAllowedUrls(Array.isArray(p.allowedUrls) ? (p.allowedUrls as string[]) : []);
+  }, [policy.policyJson]);
+
+  const isDirty = useMemo(() => {
+    const p = parsePolicyJson(policy.policyJson);
+    const savedBlocked = Array.isArray(p.blockedUrls) ? (p.blockedUrls as string[]) : [];
+    const savedAllowed = Array.isArray(p.allowedUrls) ? (p.allowedUrls as string[]) : [];
+    return (
+      JSON.stringify(blockedUrls) !== JSON.stringify(savedBlocked) ||
+      JSON.stringify(allowedUrls) !== JSON.stringify(savedAllowed)
+    );
+  }, [blockedUrls, allowedUrls, policy.policyJson]);
+
+  const addBlocked = () => {
+    const url = newBlocked.trim();
+    if (url && !blockedUrls.includes(url)) {
+      setBlockedUrls((prev) => [...prev, url]);
+      setNewBlocked('');
+    }
+  };
+
+  const addAllowed = () => {
+    const url = newAllowed.trim();
+    if (url && !allowedUrls.includes(url)) {
+      setAllowedUrls((prev) => [...prev, url]);
+      setNewAllowed('');
+    }
+  };
+
+  const handleSave = () => {
+    const base = parsePolicyJson(policy.policyJson);
+    onSave(JSON.stringify({ ...base, blockedUrls, allowedUrls }));
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Browser applicability notice */}
+      <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <Globe size={16} className="text-blue-500 shrink-0 mt-0.5" aria-hidden="true" />
+        <div>
+          <p className="text-sm font-semibold text-blue-800">Applies to Google Chrome on Android</p>
+          <p className="text-xs text-blue-600 mt-1">
+            URL filters are pushed via <strong>Android Managed Configurations</strong> using the Chrome Enterprise{' '}
+            <code className="bg-blue-100 px-1 rounded">URLBlocklist</code> and{' '}
+            <code className="bg-blue-100 px-1 rounded">URLAllowlist</code> policies.
+            Only <strong>Google Chrome</strong> respects these managed config keys — Firefox, Samsung Internet,
+            Opera, and other browsers on the same device are <em>not</em> affected.
+          </p>
+        </div>
+      </div>
+
+      {/* Pattern syntax hint */}
+      <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-1">
+        <p className="text-xs font-semibold text-gray-700">Chrome URL filter pattern syntax</p>
+        <div className="text-xs text-gray-500 space-y-0.5">
+          <p><code className="bg-white border border-gray-200 px-1 rounded">*.example.com</code> — all subdomains of example.com</p>
+          <p><code className="bg-white border border-gray-200 px-1 rounded">example.com/path</code> — a specific path prefix</p>
+          <p><code className="bg-white border border-gray-200 px-1 rounded">https://example.com</code> — HTTPS only</p>
+          <p><code className="bg-white border border-gray-200 px-1 rounded">*</code> — everything (use in blocklist with a specific allowlist)</p>
+        </div>
+      </div>
+
+      {/* Blocked URLs */}
+      <div>
+        <p className="text-sm font-semibold text-gray-800 mb-0.5">Blocked URLs</p>
+        <p className="text-xs text-gray-500 mb-3">
+          Chrome will show an error page for any URL matching these patterns.
+        </p>
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={newBlocked}
+            onChange={(e) => setNewBlocked(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBlocked(); } }}
+            placeholder="e.g. *.facebook.com"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+          />
+          <button
+            type="button"
+            onClick={addBlocked}
+            disabled={!newBlocked.trim()}
+            className="px-3 py-2 text-sm font-medium bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-colors"
+          >
+            + Block
+          </button>
+        </div>
+        {blockedUrls.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">No blocked URLs — all URLs are accessible in Chrome.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {blockedUrls.map((url) => (
+              <span
+                key={url}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200"
+              >
+                {url}
+                <button
+                  type="button"
+                  onClick={() => setBlockedUrls((prev) => prev.filter((u) => u !== url))}
+                  aria-label={`Remove ${url} from blocked list`}
+                  className="hover:text-red-900 focus-visible:outline-none rounded-full"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Allowed URLs */}
+      <div>
+        <p className="text-sm font-semibold text-gray-800 mb-0.5">Allowed URLs</p>
+        <p className="text-xs text-gray-500 mb-3">
+          These URLs are explicitly permitted in Chrome, overriding any matching block rule above.
+        </p>
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={newAllowed}
+            onChange={(e) => setNewAllowed(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAllowed(); } }}
+            placeholder="e.g. intranet.company.com"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+          />
+          <button
+            type="button"
+            onClick={addAllowed}
+            disabled={!newAllowed.trim()}
+            className="px-3 py-2 text-sm font-medium bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 transition-colors"
+          >
+            + Allow
+          </button>
+        </div>
+        {allowedUrls.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">
+            No explicit allowlist — Chrome access is determined solely by the block rules above.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {allowedUrls.map((url) => (
+              <span
+                key={url}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200"
+              >
+                {url}
+                <button
+                  type="button"
+                  onClick={() => setAllowedUrls((prev) => prev.filter((u) => u !== url))}
+                  aria-label={`Remove ${url} from allowed list`}
+                  className="hover:text-green-900 focus-visible:outline-none rounded-full"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Save footer */}
+      <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+        <p className="text-xs text-gray-400">
+          {isDirty ? 'You have unsaved changes.' : 'All changes saved.'}
+        </p>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving || !isDirty}
+          className="px-4 py-2 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
+        >
+          {isSaving ? 'Saving…' : 'Save Settings'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Camera Settings ────────────────────────────────────────────────────────── */
+const CAMERA_COMMAND_LABELS: Record<string, string> = {
+  DisableCamera: 'Disable Camera',
+  EnableCamera: 'Enable Camera',
+};
+
+function CameraSettings({ commandType }: { commandType: string }) {
+  const isDisable = commandType === 'DisableCamera';
+  return (
+    <div className="space-y-4">
+      <div className={`flex items-start gap-3 rounded-lg p-4 border ${
+        isDisable ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+      }`}>
+        <Camera size={16} className={`shrink-0 mt-0.5 ${isDisable ? 'text-red-500' : 'text-green-600'}`} aria-hidden="true" />
+        <div>
+          <p className={`text-sm font-semibold ${isDisable ? 'text-red-800' : 'text-green-800'}`}>
+            {isDisable ? 'Camera will be disabled on enrolled devices' : 'Camera will be re-enabled on enrolled devices'}
+          </p>
+          <p className={`text-xs mt-1 ${isDisable ? 'text-red-600' : 'text-green-600'}`}>
+            Uses Android <strong>DevicePolicyManager.setCameraDisabled()</strong> via Device Admin.
+            Only requires Device Admin — no Device Owner needed.
+          </p>
+        </div>
+      </div>
+      <dl className="grid grid-cols-2 gap-3">
+        {[
+          ['Command', CAMERA_COMMAND_LABELS[commandType] ?? commandType],
+          ['Payload', 'None required'],
+          ['Privilege', 'Device Admin'],
+          ['Effect', isDisable ? 'Blocks all camera apps' : 'Restores camera access'],
+        ].map(([label, value]) => (
+          <div key={label} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+            <dt className="text-xs text-gray-500 mb-0.5">{label}</dt>
+            <dd className="text-sm font-semibold text-gray-800">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-gray-400">
+        Click <strong>Enforce on Devices</strong> in the header to dispatch this command to all enrolled devices now.
+      </p>
+    </div>
+  );
+}
+
 /* ── Tabs ───────────────────────────────────────────────────────────────────── */
 type Tab = 'settings' | 'assignments' | 'overview';
 
@@ -222,6 +527,7 @@ export default function PolicyDetailPage() {
   const [tab, setTab] = useState<Tab>('settings');
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [enforceResult, setEnforceResult] = useState<PolicyEnforceResult | null>(null);
 
   const { data: policy, isLoading } = useQuery({
     queryKey: ['policy', id],
@@ -234,7 +540,6 @@ export default function PolicyDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['policy', id] });
       qc.invalidateQueries({ queryKey: ['policies'] });
-      setShowEdit(false);
     },
   });
 
@@ -251,6 +556,13 @@ export default function PolicyDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['policy', id] });
       qc.invalidateQueries({ queryKey: ['policies'] });
+    },
+  });
+
+  const enforceMutation = useMutation({
+    mutationFn: () => enforcePolicy(id!),
+    onSuccess: (result) => {
+      setEnforceResult(result);
     },
   });
 
@@ -286,7 +598,7 @@ export default function PolicyDetailPage() {
         <EditModal
           policy={policy}
           onClose={() => setShowEdit(false)}
-          onSave={(data) => updateMutation.mutate(data)}
+          onSave={(data) => updateMutation.mutate(data, { onSuccess: () => setShowEdit(false) })}
           isSaving={updateMutation.isPending}
         />
       )}
@@ -336,6 +648,16 @@ export default function PolicyDetailPage() {
             >
               <Info size={15} aria-hidden="true" />
             </button>
+            {policy.commandType && (
+              <button
+                onClick={() => { setEnforceResult(null); enforceMutation.mutate(); }}
+                disabled={enforceMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
+              >
+                <Play size={14} aria-hidden="true" />
+                {enforceMutation.isPending ? 'Enforcing…' : 'Enforce on Devices'}
+              </button>
+            )}
             <button
               onClick={() => setShowEdit(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
@@ -352,6 +674,31 @@ export default function PolicyDetailPage() {
             </button>
           </div>
         </div>
+
+        {/* ── Enforce result banner ── */}
+        {enforceResult && (
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <CheckCircle size={16} className="text-green-600 shrink-0" aria-hidden="true" />
+            <p className="text-sm text-green-800">
+              Command dispatched to <strong>{enforceResult.commandsSent}</strong> of{' '}
+              <strong>{enforceResult.totalDevices}</strong> enrolled device{enforceResult.totalDevices !== 1 ? 's' : ''}.
+            </p>
+            <button
+              onClick={() => setEnforceResult(null)}
+              aria-label="Dismiss"
+              className="ml-auto text-green-500 hover:text-green-700 focus-visible:outline-none"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        {enforceMutation.isError && (
+          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            <p className="text-sm text-red-800">
+              {(enforceMutation.error as Error)?.message ?? 'Failed to enforce policy. Check that the policy has a command configured.'}
+            </p>
+          </div>
+        )}
 
         {/* ── Stats ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -409,7 +756,25 @@ export default function PolicyDetailPage() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900">Policy Settings</h2>
             <p className="text-sm text-gray-500 mt-0.5 mb-5">Configured rules and requirements for this policy</p>
-            <PolicySettings policyJson={policy.policyJson} />
+            {(policy.commandType === 'DisableCamera' || policy.commandType === 'EnableCamera') ? (
+              <CameraSettings commandType={policy.commandType} />
+            ) : getPolicyType(policy) === 'website_restrictions' ? (
+              <WebRestrictionSettings
+                policy={policy}
+                onSave={(policyJson) =>
+                  updateMutation.mutate({
+                    name: policy.name,
+                    category: policy.category,
+                    severity: policy.severity,
+                    policyJson,
+                    commandType: policy.commandType,
+                  })
+                }
+                isSaving={updateMutation.isPending}
+              />
+            ) : (
+              <PolicySettings policyJson={policy.policyJson} />
+            )}
           </div>
         )}
 
@@ -432,6 +797,7 @@ export default function PolicyDetailPage() {
                 ['Type', TYPE_META[policy.category]?.label ?? policy.category],
                 ['Severity', policy.severity],
                 ['Status', policy.isEnabled ? 'Active' : 'Draft'],
+                ['Command', policy.commandType || '—'],
                 ['Created', new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(policy.createdOn))],
                 ['Created By', 'Admin User'],
               ].map(([label, value]) => (

@@ -62,5 +62,23 @@ namespace SDM.API.Controllers
             if (!result) return NotFound();
             return NoContent();
         }
+
+        [HttpPost("{id:guid}/enforce")]
+        public async Task<IActionResult> Enforce([FromRoute] Guid id)
+        {
+            try
+            {
+                var result = await _policyService.EnforceAsync(id);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
     }
 }

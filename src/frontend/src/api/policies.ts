@@ -1,5 +1,5 @@
 import client from './client';
-import type { Policy, CreatePolicyRequest, UpdatePolicyRequest } from '../types/policy';
+import type { Policy, CreatePolicyRequest, UpdatePolicyRequest, PolicyEnforceResult } from '../types/policy';
 
 export const listPolicies = () =>
   client.get<Policy[]>('/policies').then((r) => r.data);
@@ -18,3 +18,6 @@ export const updatePolicy = (id: string, data: UpdatePolicyRequest) =>
 
 export const deletePolicy = (id: string) =>
   client.delete(`/policies/${id}`).then((r) => r.data);
+
+export const enforcePolicy = (id: string) =>
+  client.post<PolicyEnforceResult>(`/policies/${id}/enforce`).then((r) => r.data);

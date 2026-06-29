@@ -8,6 +8,7 @@ namespace SDM.Application.DTOs.Policy
         public bool IsEnabled { get; set; }
         public string Category { get; set; } = string.Empty;
         public string Severity { get; set; } = string.Empty;
+        public string CommandType { get; set; } = string.Empty;
         public DateTime CreatedOn { get; set; }
     }
 
@@ -18,6 +19,7 @@ namespace SDM.Application.DTOs.Policy
         public bool IsEnabled { get; set; } = true;
         public string Category { get; set; } = string.Empty;
         public string Severity { get; set; } = "medium";
+        public string CommandType { get; set; } = string.Empty;
     }
 
     public class UpdatePolicyRequest
@@ -26,5 +28,12 @@ namespace SDM.Application.DTOs.Policy
         public string PolicyJson { get; set; } = "{}";
         public string Category { get; set; } = string.Empty;
         public string Severity { get; set; } = "medium";
+        public string CommandType { get; set; } = string.Empty;
+    }
+
+    public class PolicyEnforceResult
+    {
+        public int TotalDevices { get; set; }
+        public int CommandsSent { get; set; }
     }
 }

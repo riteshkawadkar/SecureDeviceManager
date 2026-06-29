@@ -1,3 +1,4 @@
+using SDM.Application.DTOs.Command;
 using SDM.Domain.Entities;
 
 namespace SDM.Application.Interfaces
@@ -6,5 +7,6 @@ namespace SDM.Application.Interfaces
     {
         Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload);
         Task ReportCommandStatusAsync(Guid deviceId, Guid commandId, bool success);
+        Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload);
     }
 }

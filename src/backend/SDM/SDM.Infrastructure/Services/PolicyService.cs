@@ -8,10 +8,12 @@ namespace SDM.Infrastructure.Services
     public class PolicyService : IPolicyService
     {
         private readonly ApplicationDbContext _db;
+        private readonly ICommandService _commandService;
 
-        public PolicyService(ApplicationDbContext db)
+        public PolicyService(ApplicationDbContext db, ICommandService commandService)
         {
             _db = db;
+            _commandService = commandService;
         }
 
         private static PolicyDto ToDto(SDM.Domain.Entities.Policy p) => new()
@@ -22,6 +24,7 @@ namespace SDM.Infrastructure.Services
             IsEnabled = p.IsEnabled,
             Category = p.Category,
             Severity = p.Severity,
+            CommandType = p.CommandType,
             CreatedOn = p.CreatedOn
         };
 
@@ -47,6 +50,7 @@ namespace SDM.Infrastructure.Services
                 IsEnabled = request.IsEnabled,
                 Category = request.Category,
                 Severity = request.Severity,
+                CommandType = request.CommandType,
                 CreatedOn = DateTime.UtcNow
             };
 
@@ -64,9 +68,33 @@ namespace SDM.Infrastructure.Services
             policy.PolicyJson = request.PolicyJson;
             policy.Category = request.Category;
             policy.Severity = request.Severity;
+            policy.CommandType = request.CommandType;
 
             await _db.SaveChangesAsync();
             return ToDto(policy);
+        }
+
+        public async Task<PolicyEnforceResult> EnforceAsync(Guid id)
+        {
+            var policy = await _db.Policies.FindAsync(id)
+                ?? throw new KeyNotFoundException($"Policy {id} not found.");
+
+            if (string.IsNullOrWhiteSpace(policy.CommandType))
+                throw new InvalidOperationException("This policy has no command type configured.");
+
+            var devices = await _db.Devices.AsNoTracking().ToListAsync();
+            int sent = 0;
+            foreach (var device in devices)
+            {
+                try
+                {
+                    await _commandService.CreateCommandAsync(device.Id, policy.CommandType, "{}");
+                    sent++;
+                }
+                catch { /* best-effort: continue to next device */ }
+            }
+
+            return new PolicyEnforceResult { TotalDevices = devices.Count, CommandsSent = sent };
         }
 
         public async Task<PolicyDto?> ToggleAsync(Guid id)

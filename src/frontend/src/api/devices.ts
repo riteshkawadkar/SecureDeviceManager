@@ -26,3 +26,13 @@ export const listViolations = (deviceId: string) =>
 
 export const sendCommand = (deviceId: string, commandType: string, payload: object = {}) =>
   client.post(`/devices/${deviceId}/commands`, { commandType, payload }).then((r) => r.data);
+
+export interface BulkCommandResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: Array<{ deviceId: string; success: boolean; commandId?: string; error?: string }>;
+}
+
+export const sendBulkCommand = (req: { deviceIds: string[]; commandType: string; payload?: object }) =>
+  client.post<BulkCommandResult>('/commands/bulk', req).then((r) => r.data);

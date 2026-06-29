@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SDM.Application.DTOs.Command;
 using SDM.Application.Interfaces;
 using SDM.Domain.Entities;
 using SDM.Domain;
@@ -72,6 +73,30 @@ namespace SDM.Infrastructure.Services
             await _db.SaveChangesAsync();
 
             return cmd;
+        }
+
+        public async Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload)
+        {
+            var results = new List<BulkCommandDeviceResult>();
+            foreach (var deviceId in deviceIds)
+            {
+                try
+                {
+                    var cmd = await CreateCommandAsync(deviceId, commandType, payload);
+                    results.Add(new BulkCommandDeviceResult { DeviceId = deviceId, Success = true, CommandId = cmd.Id });
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new BulkCommandDeviceResult { DeviceId = deviceId, Success = false, Error = ex.Message });
+                }
+            }
+            return new BulkCommandResult
+            {
+                Total = results.Count,
+                Succeeded = results.Count(r => r.Success),
+                Failed = results.Count(r => !r.Success),
+                Results = results,
+            };
         }
 
         public async Task ReportCommandStatusAsync(Guid deviceId, Guid commandId, bool success)
