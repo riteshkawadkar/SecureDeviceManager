@@ -42,6 +42,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: sdm_user
+      Firebase__ServiceAccountPath: /app/firebase-sa.json
     ports:
       - "5254:5254"
     depends_on:
