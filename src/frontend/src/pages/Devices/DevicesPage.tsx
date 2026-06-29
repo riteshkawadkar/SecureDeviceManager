@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Plus, MoreHorizontal, Eye, Trash2 } from 'lucide-react';
 import { listDevices, deleteDevice } from '../../api/devices';
-import { ComplianceBadge } from '../../components/ui/StatusBadge';
+import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import Pagination from '../../components/ui/Pagination';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 import type { Device, PagedResult } from '../../types/device';
@@ -247,39 +247,5 @@ export default function DevicesPage() {
         document.body,
       )}
     </div>
-  );
-}
-
-function LiveStatusBadge({ lastSeen }: { lastSeen: string | null }) {
-  if (!lastSeen) {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-        Never
-      </span>
-    );
-  }
-  const mins = (Date.now() - new Date(lastSeen).getTime()) / 60000;
-  if (mins < 5) {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-        Online
-      </span>
-    );
-  }
-  if (mins < 1440) {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-        Offline
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-      Inactive
-    </span>
   );
 }

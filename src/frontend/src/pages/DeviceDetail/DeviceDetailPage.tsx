@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Trash2, ArrowLeft, AlertTriangle, Smartphone } from 'lucide-react';
 import { getDevice, listViolations, sendCommand } from '../../api/devices';
 import { listPolicies } from '../../api/policies';
-import { ComplianceBadge, OnlineBadge } from '../../components/ui/StatusBadge';
+import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 
 export default function DeviceDetailPage() {
@@ -76,7 +76,7 @@ export default function DeviceDetailPage() {
             <h2 className="text-lg font-bold text-gray-900">{device.deviceIdentifier}</h2>
             <p className="text-sm text-gray-500">{device.model} · {device.androidVersion}</p>
             <div className="flex items-center gap-2 mt-1.5">
-              <OnlineBadge status={device.status} />
+              <LiveStatusBadge lastSeen={device.lastSeen} />
               <ComplianceBadge status={device.complianceStatus} />
             </div>
           </div>
