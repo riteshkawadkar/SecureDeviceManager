@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:15
+    container_name: sdm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sdm_user
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: sdm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - sdm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdm_user -d sdm_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:7
+    container_name: sdm-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8081:80"
+    depends_on:
+      - db
+
+  api:
+    build:
+      context: ./src/backend/SDM
+      dockerfile: SDM.API/Dockerfile
+    container_name: sdm-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5254
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=sdm_db;Username=sdm_user;Password=secret"
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: sdm_user
+    ports:
+      - "5254:5254"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src/backend/SDM/SDM.API/firebase-sa.json:/app/firebase-sa.json
+
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+    container_name: sdm-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  sdm_pgdata:

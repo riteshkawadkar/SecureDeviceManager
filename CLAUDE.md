@@ -11,24 +11,40 @@ All source lives under `src/backend/SDM/`. The solution file is `src/backend/SDM
 ## Common Commands
 
 ```powershell
-# Start local Postgres + pgAdmin via Docker Compose
+# ── Docker (run from REPO ROOT) ──────────────────────────────────────────────
+# Start the full stack: Postgres + pgAdmin + API + Frontend
 docker compose up -d
 
+# Rebuild a single service after code changes
+docker compose up -d --build api
+docker compose up -d --build frontend
+
+# ── Backend (run from src/backend/SDM/) ──────────────────────────────────────
 # Apply EF Core migrations
 dotnet ef database update --project "SDM.Infrastructure/SDM.Infrastructure.csproj" --startup-project "SDM.API/SDM.API.csproj"
 
 # Add a new EF migration
 dotnet ef migrations add <MigrationName> --project "SDM.Infrastructure/SDM.Infrastructure.csproj" --startup-project "SDM.API/SDM.API.csproj"
 
-# Run the API in Development mode
+# Run the API in Development mode (local, no Docker)
 $Env:ASPNETCORE_ENVIRONMENT='Development'; dotnet run --project "SDM.API/SDM.API.csproj"
 
 # Build the full solution
 dotnet build SDM.slnx
+
+# ── Frontend (run from src/frontend/) ────────────────────────────────────────
+# Dev server (proxies /api → localhost:5254)
+npm run dev
+
+# Production build
+npm run build
 ```
 
-- Swagger UI: `http://localhost:<port>/swagger` (Development only)
-- Hangfire dashboard: `http://localhost:<port>/hangfire` (Development only, when `Hangfire:Enabled` is true)
+- Frontend (Docker): `http://localhost:3000`
+- Frontend (dev server): `http://localhost:5173`
+- API (Docker / local): `http://localhost:5254`
+- Swagger UI: `http://localhost:5254/swagger` (Development only)
+- Hangfire dashboard: `http://localhost:5254/hangfire` (Development only, when `Hangfire:Enabled` is true)
 - pgAdmin: `http://localhost:8081` (credentials: `admin@local.com` / `admin`)
 
 ## Architecture
@@ -88,7 +104,7 @@ Required sections in `appsettings.json` / environment:
 
 `PushService` prefers `Firebase:ServiceAccountPath` (FCM HTTP v1 with a service account JSON); falls back to `Firebase:ServerKey` (legacy). Set `Hangfire:Enabled` to `false` to skip Hangfire registration (useful for environments without Hangfire support).
 
-The Development appsettings are at `SDM.API/appsettings.Development.json`. The Docker Compose file mounts `SDM.API/firebase-sa.json` into the container at `/app/firebase-sa.json`.
+The Development appsettings are at `src/backend/SDM/SDM.API/appsettings.Development.json`. The root Docker Compose file mounts `src/backend/SDM/SDM.API/firebase-sa.json` into the API container at `/app/firebase-sa.json`.
 
 ## Android Sample Agent
 

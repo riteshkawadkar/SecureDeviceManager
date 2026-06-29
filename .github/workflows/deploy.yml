@@ -5,13 +5,12 @@ on:
     branches: [ master ]
     paths:
       - 'src/backend/**'
+      - 'src/frontend/**'
+      - 'docker-compose.yml'
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src/backend/SDM
 
     steps:
       - name: Checkout
@@ -22,10 +21,22 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build
+      - name: Build backend
+        working-directory: src/backend/SDM
         run: |
           dotnet restore SDM.slnx
           dotnet build SDM.slnx --no-restore -c Release
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        working-directory: src/frontend
+        run: |
+          npm ci
+          npm run build
 
       - name: Deploy via SSH
         env:
@@ -42,9 +53,9 @@ jobs:
             set -e
             cd ~/SecureDeviceManager
             git pull origin master
-            cd src/backend/SDM
             docker compose down
-            docker compose build --no-cache api
+            docker compose build --no-cache api frontend
             docker compose up -d
             docker compose logs api --tail=20
+            docker compose logs frontend --tail=10
           "

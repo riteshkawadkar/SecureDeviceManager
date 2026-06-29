@@ -1,50 +1,6 @@
-version: '3.8'
-services:
-  db:
-    image: postgres:15
-    container_name: sdm-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: sdm_user
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: sdm_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - sdm_pgdata:/var/lib/postgresql/data
-
-  pgadmin:
-    image: dpage/pgadmin4:7
-    container_name: sdm-pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "8081:80"
-    depends_on:
-      - db
-
-  api:
-    build:
-      context: .
-      dockerfile: SDM.API/Dockerfile
-    container_name: sdm-api
-    restart: unless-stopped
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: sdm_user
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:5254
-      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=sdm_db;Username=sdm_user;Password=secret"
-    ports:
-      - "5254:5254"
-    depends_on:
-      - db
-    volumes:
-      - ./SDM.API/firebase-sa.json:/app/firebase-sa.json
-
-
-volumes:
-  sdm_pgdata:
+# ⚠ This file is no longer the primary compose file.
+# The compose file for the full stack (backend + frontend + db) lives at the repo root:
+#
+#   docker compose up -d          (run from repo root)
+#
+# This file is kept only as a reference; do not run it from here.
