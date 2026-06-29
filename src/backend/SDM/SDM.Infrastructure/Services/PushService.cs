@@ -70,7 +70,8 @@ namespace SDM.Infrastructure.Services
                         message = new
                         {
                             token = token,
-                            data = fcmData
+                            data = fcmData,
+                            android = new { priority = "HIGH" }
                         }
                     };
 
@@ -106,6 +107,7 @@ namespace SDM.Infrastructure.Services
             var payloadLegacy = new
             {
                 to = token,
+                priority = "high",
                 data = BuildFcmData(title, body, data)
             };
 
