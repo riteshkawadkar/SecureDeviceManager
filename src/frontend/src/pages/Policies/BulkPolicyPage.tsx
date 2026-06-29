@@ -4,6 +4,8 @@ import {
   Shield, Smartphone, Wifi, Bluetooth, Camera, Lock, Globe,
   Package, ChevronRight, ChevronLeft, CheckCircle2, Search,
   ChevronDown, Layers, HardDrive, AlertTriangle, Loader2,
+  Plane, Radio, Volume2, MessageSquare, Phone, Trash2, Users,
+  MapPin, RotateCcw, WifiOff, BluetoothOff,
 } from 'lucide-react';
 import { listDevices, sendBulkCommand } from '../../api/devices';
 import type { BulkCommandResult } from '../../api/devices';
@@ -31,9 +33,17 @@ type PolicyDef = {
   label: string;
   description: string;
   requiresOwner: boolean;
-  /** If present, the item has a binary direction (e.g. block vs allow). */
+  /**
+   * Android UserManager restriction key (e.g. "no_camera").
+   * When set, emits a single SetUserRestriction command with {restriction, enabled} payload.
+   * action=true → apply restriction; action=false → lift restriction.
+   */
+  restrictionKey?: string;
+  /** UI labels for the restrict/allow toggle when restrictionKey is set. */
+  restrictionLabels?: { restrict: string; lift: string };
+  /** Binary command pair where each direction is a distinct command type. */
   binaryAction?: { trueLabel: string; falseLabel: string; trueCmd: string; falseCmd: string };
-  /** Used when there is no binary direction. */
+  /** Single command type (no binary direction). */
   fixedCmd?: string;
   params?: PolicyParam[];
   /** When set, params are only shown when action === this value. */
@@ -70,50 +80,141 @@ const POLICY_DEFS: PolicyDef[] = [
     requiresOwner: false,
     binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableCamera', falseCmd: 'EnableCamera' },
   },
-  // ── Network ─────────────────────────────────────────────────────────────────
+  {
+    id: 'factoryReset',
+    category: 'Security',
+    icon: RotateCcw,
+    label: 'Factory Reset',
+    description: 'Prevent users from wiping the device via Settings → Factory Reset (no_factory_reset)',
+    requiresOwner: true,
+    restrictionKey: 'no_factory_reset',
+    restrictionLabels: { restrict: 'Prevent', lift: 'Allow' },
+  },
+  // ── Network & Connectivity ──────────────────────────────────────────────────
   {
     id: 'wifi',
-    category: 'Network',
+    category: 'Network & Connectivity',
     icon: Wifi,
-    label: 'Wi-Fi Control',
-    description: 'Prevent users from modifying Wi-Fi settings',
+    label: 'Wi-Fi Toggle',
+    description: 'Turn the Wi-Fi adapter on or off entirely',
     requiresOwner: true,
-    binaryAction: { trueLabel: 'Block changes', falseLabel: 'Allow changes', trueCmd: 'DisableWifi', falseCmd: 'EnableWifi' },
+    binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableWifi', falseCmd: 'EnableWifi' },
+  },
+  {
+    id: 'wifiConfig',
+    category: 'Network & Connectivity',
+    icon: WifiOff,
+    label: 'Wi-Fi Configuration Lock',
+    description: 'Prevent users from adding, removing or changing Wi-Fi access points (no_config_wifi)',
+    requiresOwner: true,
+    restrictionKey: 'no_config_wifi',
+    restrictionLabels: { restrict: 'Lock', lift: 'Unlock' },
   },
   {
     id: 'bluetooth',
-    category: 'Network',
+    category: 'Network & Connectivity',
     icon: Bluetooth,
-    label: 'Bluetooth',
-    description: 'Enable or disable Bluetooth adapter',
+    label: 'Bluetooth Toggle',
+    description: 'Turn the Bluetooth adapter on or off entirely',
     requiresOwner: true,
     binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableBluetooth', falseCmd: 'EnableBluetooth' },
   },
   {
+    id: 'bluetoothConfig',
+    category: 'Network & Connectivity',
+    icon: BluetoothOff,
+    label: 'Bluetooth Configuration Lock',
+    description: 'Prevent users from pairing new Bluetooth devices or changing Bluetooth settings (no_config_bluetooth)',
+    requiresOwner: true,
+    restrictionKey: 'no_config_bluetooth',
+    restrictionLabels: { restrict: 'Lock', lift: 'Unlock' },
+  },
+  {
+    id: 'airplaneMode',
+    category: 'Network & Connectivity',
+    icon: Plane,
+    label: 'Airplane Mode',
+    description: 'Prevent users from enabling Airplane Mode and cutting all radio communication (no_airplane_mode)',
+    requiresOwner: true,
+    restrictionKey: 'no_airplane_mode',
+    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
+  },
+  {
     id: 'usb',
-    category: 'Network',
+    category: 'Network & Connectivity',
     icon: HardDrive,
-    label: 'USB Transfer',
-    description: 'Block or allow USB file transfer',
+    label: 'USB File Transfer',
+    description: 'Block or allow USB file transfer (MTP/PTP) from this device (no_usb_file_transfer)',
     requiresOwner: true,
     binaryAction: { trueLabel: 'Block', falseLabel: 'Allow', trueCmd: 'BlockUsb', falseCmd: 'UnblockUsb' },
   },
-  // ── Apps & Restrictions ─────────────────────────────────────────────────────
+  {
+    id: 'tethering',
+    category: 'Network & Connectivity',
+    icon: Radio,
+    label: 'Mobile Hotspot & Tethering',
+    description: 'Prevent users from sharing mobile data as a Wi-Fi hotspot or via USB tethering (no_config_tether)',
+    requiresOwner: true,
+    restrictionKey: 'no_config_tether',
+    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
+  },
+  // ── Device & Hardware ────────────────────────────────────────────────────────
+  {
+    id: 'volume',
+    category: 'Device & Hardware',
+    icon: Volume2,
+    label: 'Volume Control',
+    description: 'Prevent users from adjusting the global device volume (no_adjust_volume)',
+    requiresOwner: false,
+    restrictionKey: 'no_adjust_volume',
+    restrictionLabels: { restrict: 'Lock', lift: 'Allow' },
+  },
+  {
+    id: 'sms',
+    category: 'Device & Hardware',
+    icon: MessageSquare,
+    label: 'SMS Messaging',
+    description: 'Block sending and receiving SMS messages on the device (no_sms)',
+    requiresOwner: true,
+    restrictionKey: 'no_sms',
+    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
+  },
+  {
+    id: 'outgoingCalls',
+    category: 'Device & Hardware',
+    icon: Phone,
+    label: 'Outgoing Phone Calls',
+    description: 'Block standard outgoing calls — emergency calls (911/112) are always permitted (no_outgoing_calls)',
+    requiresOwner: true,
+    restrictionKey: 'no_outgoing_calls',
+    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
+  },
+  // ── Apps & System ───────────────────────────────────────────────────────────
   {
     id: 'appInstall',
-    category: 'Apps & Restrictions',
+    category: 'Apps & System',
     icon: Package,
     label: 'App Installation',
-    description: 'Control whether users can install applications',
+    description: 'Control whether users can install new applications (no_install_apps)',
     requiresOwner: true,
     binaryAction: { trueLabel: 'Restrict', falseLabel: 'Allow', trueCmd: 'DisableAppInstall', falseCmd: 'EnableAppInstall' },
   },
   {
+    id: 'appUninstall',
+    category: 'Apps & System',
+    icon: Trash2,
+    label: 'App Uninstall',
+    description: 'Prevent users from deleting any installed application (no_uninstall_apps)',
+    requiresOwner: true,
+    restrictionKey: 'no_uninstall_apps',
+    restrictionLabels: { restrict: 'Prevent', lift: 'Allow' },
+  },
+  {
     id: 'kiosk',
-    category: 'Apps & Restrictions',
+    category: 'Apps & System',
     icon: Smartphone,
     label: 'Kiosk Mode',
-    description: 'Lock device to a single application (task-lock / screen-pinning)',
+    description: 'Lock the device to a single application (task-lock / screen-pinning)',
     requiresOwner: true,
     binaryAction: { trueLabel: 'Enable', falseLabel: 'Disable', trueCmd: 'EnableKiosk', falseCmd: 'DisableKiosk' },
     params: [{ key: 'packageName', label: 'App Package Name', type: 'text', placeholder: 'com.example.app' }],
@@ -121,7 +222,7 @@ const POLICY_DEFS: PolicyDef[] = [
   },
   {
     id: 'webRestrictions',
-    category: 'Apps & Restrictions',
+    category: 'Apps & System',
     icon: Globe,
     label: 'Web Restrictions',
     description: 'Apply URL block/allow lists to Chrome via managed configuration',
@@ -132,6 +233,26 @@ const POLICY_DEFS: PolicyDef[] = [
       { key: 'allowedUrls', label: 'Allowed URLs (one per line)', type: 'textarea', placeholder: 'safe.internal\nwork.com' },
     ],
   },
+  {
+    id: 'accountModification',
+    category: 'Apps & System',
+    icon: Users,
+    label: 'Account Modification',
+    description: 'Prevent users from adding or removing Google/corporate accounts on the device (no_modify_accounts)',
+    requiresOwner: true,
+    restrictionKey: 'no_modify_accounts',
+    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
+  },
+  {
+    id: 'locationSharing',
+    category: 'Apps & System',
+    icon: MapPin,
+    label: 'Location Sharing',
+    description: 'Prevent users from modifying location sharing settings or disabling GPS (no_share_location)',
+    requiresOwner: true,
+    restrictionKey: 'no_share_location',
+    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
+  },
 ];
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -140,7 +261,7 @@ type TemplateId = 'securityBaseline' | 'kioskMode' | 'byod' | 'networkLockdown';
 
 type PolicyItemState = {
   enabled: boolean;
-  /** true = restrictive direction (disable/block), false = permissive (enable/allow) */
+  /** true = restrictive direction (disable/block/restrict), false = permissive (enable/allow/lift) */
   action: boolean;
   params: Record<string, string | number>;
 };
@@ -169,42 +290,50 @@ type TemplateDef = {
 const TEMPLATES: Record<TemplateId, TemplateDef> = {
   securityBaseline: {
     label: 'Security Baseline',
-    description: 'Password policy, camera off, USB blocked — minimum corporate hardening',
+    description: 'Password policy, camera off, USB blocked, factory reset prevention — minimum corporate hardening',
     icon: Shield,
     settings: {
-      password: { enabled: true, action: true, params: { minLength: 8, quality: 'ALPHANUMERIC' } },
-      camera: { enabled: true, action: true, params: {} },
-      usb: { enabled: true, action: true, params: {} },
+      password:     { enabled: true, action: true, params: { minLength: 8, quality: 'ALPHANUMERIC' } },
+      camera:       { enabled: true, action: true, params: {} },
+      usb:          { enabled: true, action: true, params: {} },
+      factoryReset: { enabled: true, action: true, params: {} },
+      accountModification: { enabled: true, action: true, params: {} },
     },
   },
   kioskMode: {
     label: 'Kiosk Mode',
-    description: 'Pin one app, block Wi-Fi and Bluetooth changes, restrict installs',
+    description: 'Pin one app, lock Wi-Fi/Bluetooth config, block installs and location sharing',
     icon: Smartphone,
     settings: {
-      kiosk: { enabled: true, action: true, params: { packageName: '' } },
-      wifi: { enabled: true, action: true, params: {} },
-      bluetooth: { enabled: true, action: true, params: {} },
-      appInstall: { enabled: true, action: true, params: {} },
+      kiosk:           { enabled: true, action: true,  params: { packageName: '' } },
+      wifiConfig:      { enabled: true, action: true,  params: {} },
+      bluetoothConfig: { enabled: true, action: true,  params: {} },
+      appInstall:      { enabled: true, action: true,  params: {} },
+      appUninstall:    { enabled: true, action: true,  params: {} },
+      locationSharing: { enabled: true, action: true,  params: {} },
     },
   },
   byod: {
     label: 'BYOD Policy',
-    description: 'Restrict installs and apply web filters for personal devices',
+    description: 'Restrict installs and uninstalls, apply web filters, lock accounts for personal devices',
     icon: Package,
     settings: {
-      appInstall: { enabled: true, action: true, params: {} },
-      webRestrictions: { enabled: true, action: true, params: { blockedUrls: '', allowedUrls: '' } },
+      appInstall:          { enabled: true, action: true, params: {} },
+      appUninstall:        { enabled: true, action: true, params: {} },
+      webRestrictions:     { enabled: true, action: true, params: { blockedUrls: '', allowedUrls: '' } },
+      accountModification: { enabled: true, action: true, params: {} },
     },
   },
   networkLockdown: {
     label: 'Network Lockdown',
-    description: 'Block Wi-Fi changes, Bluetooth, and USB transfer',
+    description: 'Block Wi-Fi config, Bluetooth config, airplane mode, USB transfer, and hotspot sharing',
     icon: Wifi,
     settings: {
-      wifi: { enabled: true, action: true, params: {} },
-      bluetooth: { enabled: true, action: true, params: {} },
-      usb: { enabled: true, action: true, params: {} },
+      wifiConfig:      { enabled: true, action: true, params: {} },
+      bluetoothConfig: { enabled: true, action: true, params: {} },
+      airplaneMode:    { enabled: true, action: true, params: {} },
+      usb:             { enabled: true, action: true, params: {} },
+      tethering:       { enabled: true, action: true, params: {} },
     },
   },
 };
@@ -227,20 +356,29 @@ function buildCommands(state: PolicyState): CommandEntry[] {
     const s = state[def.id];
     if (!s?.enabled) continue;
 
-    const commandType = def.binaryAction
-      ? s.action ? def.binaryAction.trueCmd : def.binaryAction.falseCmd
-      : def.fixedCmd!;
-
+    let commandType: string;
     let payload: object;
-    if (def.id === 'webRestrictions') {
-      payload = {
-        blockedUrls: String(s.params.blockedUrls ?? '').split('\n').map((u) => u.trim()).filter(Boolean),
-        allowedUrls: String(s.params.allowedUrls ?? '').split('\n').map((u) => u.trim()).filter(Boolean),
-      };
-    } else if (def.id === 'kiosk' && !s.action) {
-      payload = {};
+
+    if (def.restrictionKey) {
+      commandType = 'SetUserRestriction';
+      payload = { restriction: def.restrictionKey, enabled: s.action };
+    } else if (def.binaryAction) {
+      commandType = s.action ? def.binaryAction.trueCmd : def.binaryAction.falseCmd;
+      if (def.id === 'kiosk' && !s.action) {
+        payload = {};
+      } else {
+        payload = { ...s.params };
+      }
     } else {
-      payload = { ...s.params };
+      commandType = def.fixedCmd!;
+      if (def.id === 'webRestrictions') {
+        payload = {
+          blockedUrls: String(s.params.blockedUrls ?? '').split('\n').map((u) => u.trim()).filter(Boolean),
+          allowedUrls: String(s.params.allowedUrls ?? '').split('\n').map((u) => u.trim()).filter(Boolean),
+        };
+      } else {
+        payload = { ...s.params };
+      }
     }
 
     cmds.push({ commandType, payload });
@@ -251,9 +389,9 @@ function buildCommands(state: PolicyState): CommandEntry[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function BulkPolicyPage() {
-  const [step, setStep]                       = useState(1);
+  const [step, setStep]                         = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateId | 'custom' | null>(null);
-  const [policyState, setPolicyState]         = useState<PolicyState>(defaultState());
+  const [policyState, setPolicyState]           = useState<PolicyState>(defaultState());
 
   const [search, setSearch]                   = useState('');
   const [statusFilter, setStatusFilter]       = useState('');
@@ -443,6 +581,14 @@ export default function BulkPolicyPage() {
                   const showParams = def.params && (
                     def.showParamsWhen === undefined ? true : s.action === def.showParamsWhen
                   );
+                  const hasToggle = !!(def.binaryAction || def.restrictionKey);
+                  const trueLabel = def.restrictionKey
+                    ? (def.restrictionLabels?.restrict ?? 'Restrict')
+                    : def.binaryAction?.trueLabel ?? '';
+                  const falseLabel = def.restrictionKey
+                    ? (def.restrictionLabels?.lift ?? 'Allow')
+                    : def.binaryAction?.falseLabel ?? '';
+
                   return (
                     <div
                       key={def.id}
@@ -467,12 +613,17 @@ export default function BulkPolicyPage() {
                             }`}>
                               {def.requiresOwner ? 'Device Owner' : 'Device Admin'}
                             </span>
+                            {def.restrictionKey && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-600">
+                                User Restriction
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-gray-400 mt-0.5 leading-tight">{def.description}</p>
                         </div>
 
                         {/* Binary toggle — only when item is enabled */}
-                        {def.binaryAction && s.enabled && (
+                        {hasToggle && s.enabled && (
                           <div className="flex bg-gray-100 rounded-lg p-0.5 shrink-0">
                             <button
                               onClick={() => updateItem(def.id, { action: true })}
@@ -480,7 +631,7 @@ export default function BulkPolicyPage() {
                                 s.action ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                               }`}
                             >
-                              {def.binaryAction.trueLabel}
+                              {trueLabel}
                             </button>
                             <button
                               onClick={() => updateItem(def.id, { action: false })}
@@ -488,7 +639,7 @@ export default function BulkPolicyPage() {
                                 !s.action ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                               }`}
                             >
-                              {def.binaryAction.falseLabel}
+                              {falseLabel}
                             </button>
                           </div>
                         )}
@@ -760,11 +911,16 @@ export default function BulkPolicyPage() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Commands to deploy</p>
               <div className="space-y-2">
                 {enabledCommands.map((cmd, i) => {
-                  const def = POLICY_DEFS.find((d) =>
-                    d.binaryAction
-                      ? d.binaryAction.trueCmd === cmd.commandType || d.binaryAction.falseCmd === cmd.commandType
-                      : d.fixedCmd === cmd.commandType,
-                  );
+                  const def = POLICY_DEFS.find((d) => {
+                    if (d.restrictionKey) {
+                      return cmd.commandType === 'SetUserRestriction' &&
+                        (cmd.payload as Record<string, unknown>).restriction === d.restrictionKey;
+                    }
+                    if (d.binaryAction) {
+                      return d.binaryAction.trueCmd === cmd.commandType || d.binaryAction.falseCmd === cmd.commandType;
+                    }
+                    return d.fixedCmd === cmd.commandType;
+                  });
                   const Icon = def?.icon ?? Shield;
                   return (
                     <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
@@ -808,8 +964,10 @@ export default function BulkPolicyPage() {
               <div className="flex items-start gap-2">
                 <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-700 leading-relaxed">
-                  Commands marked <strong>Device Owner</strong> only execute on devices where the agent has Device Owner privileges.
-                  All commands are queued — offline devices will receive them on next connection (Hangfire retries up to 5×).
+                  Commands marked <strong>Device Owner</strong> only execute on devices where the agent holds Device Owner
+                  privileges. <strong>User Restriction</strong> commands use Android&rsquo;s <code>UserManager</code> API —
+                  they require Device Owner on Android 9+. All commands are queued; offline devices receive them on next
+                  connection (Hangfire retries up to 5×).
                 </p>
               </div>
             </div>
