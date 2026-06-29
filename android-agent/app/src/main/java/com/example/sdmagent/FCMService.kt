@@ -127,7 +127,7 @@ class FCMService : FirebaseMessagingService() {
             when (command) {
 
                 // ── Lock / wipe ──────────────────────────────────────────────
-                "LockScreen", "force-lock" -> {
+                "LockDevice", "LockScreen", "force-lock" -> {
                     dpm.lockNow()
                     Log.d(TAG, "Screen locked")
                     success = true
