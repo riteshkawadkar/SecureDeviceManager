@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SDM.Domain.Entities;
 
 namespace SDM.Infrastructure.Data
@@ -13,7 +13,6 @@ namespace SDM.Infrastructure.Data
 
         public DbSet<Role> Roles => Set<Role>();
 
-        // MDM entities
         public DbSet<SDM.Domain.Entities.Device> Devices => Set<SDM.Domain.Entities.Device>();
 
         public DbSet<SDM.Domain.Entities.DeviceCommand> DeviceCommands => Set<SDM.Domain.Entities.DeviceCommand>();
@@ -30,6 +29,18 @@ namespace SDM.Infrastructure.Data
 
         public DbSet<SDM.Domain.Entities.AuditLog> AuditLogs => Set<SDM.Domain.Entities.AuditLog>();
 
+        public DbSet<SDM.Domain.Entities.DeviceViolation> DeviceViolations => Set<SDM.Domain.Entities.DeviceViolation>();
+
+        public DbSet<SDM.Domain.Entities.AppEntry> Apps => Set<SDM.Domain.Entities.AppEntry>();
+
+        public DbSet<SDM.Domain.Entities.WifiProfile> WifiProfiles => Set<SDM.Domain.Entities.WifiProfile>();
+
+        public DbSet<SDM.Domain.Entities.VpnProfile> VpnProfiles => Set<SDM.Domain.Entities.VpnProfile>();
+
+        public DbSet<SDM.Domain.Entities.BlockedDomain> BlockedDomains => Set<SDM.Domain.Entities.BlockedDomain>();
+
+        public DbSet<SDM.Domain.Entities.AllowedDomain> AllowedDomains => Set<SDM.Domain.Entities.AllowedDomain>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -40,26 +51,10 @@ namespace SDM.Infrastructure.Data
             var viewerRoleId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
             modelBuilder.Entity<Role>().HasData(
-                new Role
-                {
-                    Id = superAdminRoleId,
-                    Name = "SuperAdmin"
-                },
-                new Role
-                {
-                    Id = adminRoleId,
-                    Name = "Admin"
-                },
-                new Role
-                {
-                    Id = operatorRoleId,
-                    Name = "Operator"
-                },
-                new Role
-                {
-                    Id = viewerRoleId,
-                    Name = "Viewer"
-                });
+                new Role { Id = superAdminRoleId, Name = "SuperAdmin" },
+                new Role { Id = adminRoleId, Name = "Admin" },
+                new Role { Id = operatorRoleId, Name = "Operator" },
+                new Role { Id = viewerRoleId, Name = "Viewer" });
 
             modelBuilder.Entity<User>()
                 .HasIndex(x => x.Email)
@@ -96,8 +91,96 @@ namespace SDM.Infrastructure.Data
                 .HasForeignKey(h => h.DeviceId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // DeviceViolation relationship
+            modelBuilder.Entity<SDM.Domain.Entities.DeviceViolation>()
+                .HasOne(v => v.Device)
+                .WithMany(d => d.Violations)
+                .HasForeignKey(v => v.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Seed predefined policies
+            modelBuilder.Entity<SDM.Domain.Entities.Policy>().HasData(
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000001"),
+                    Name = "USB Blocking",
+                    PolicyJson = "{\"type\":\"usb_blocking\"}",
+                    IsEnabled = true,
+                    Category = "Security",
+                    Severity = "high",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                },
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000002"),
+                    Name = "App Installation Control",
+                    PolicyJson = "{\"type\":\"app_install_control\"}",
+                    IsEnabled = true,
+                    Category = "Security",
+                    Severity = "high",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                },
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000003"),
+                    Name = "Website Restrictions",
+                    PolicyJson = "{\"type\":\"website_restrictions\"}",
+                    IsEnabled = true,
+                    Category = "Network",
+                    Severity = "medium",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                },
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000004"),
+                    Name = "Wi-Fi Control",
+                    PolicyJson = "{\"type\":\"wifi_control\"}",
+                    IsEnabled = false,
+                    Category = "Network",
+                    Severity = "medium",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                },
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000005"),
+                    Name = "Bluetooth Blocking",
+                    PolicyJson = "{\"type\":\"bluetooth_blocking\"}",
+                    IsEnabled = true,
+                    Category = "Security",
+                    Severity = "medium",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                },
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000006"),
+                    Name = "Camera Disablement",
+                    PolicyJson = "{\"type\":\"camera_disablement\"}",
+                    IsEnabled = false,
+                    Category = "DeviceFeatures",
+                    Severity = "low",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                },
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000007"),
+                    Name = "Kiosk Mode",
+                    PolicyJson = "{\"type\":\"kiosk_mode\"}",
+                    IsEnabled = false,
+                    Category = "DeviceFeatures",
+                    Severity = "medium",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                },
+                new SDM.Domain.Entities.Policy
+                {
+                    Id = Guid.Parse("a1000000-0000-0000-0000-000000000008"),
+                    Name = "Password Policy Enforcement",
+                    PolicyJson = "{\"type\":\"password_policy\",\"minLength\":8,\"complexity\":\"alphanumeric\",\"expiryDays\":90,\"maxFailedAttempts\":5}",
+                    IsEnabled = true,
+                    Category = "Compliance",
+                    Severity = "high",
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                }
+            );
         }
-
-
     }
 }

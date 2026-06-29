@@ -63,6 +63,24 @@ namespace SDM.API.Controllers
             return Content(html, "text/html");
         }
 
+        [Authorize]
+        [HttpGet("tokens")]
+        public async Task<IActionResult> GetTokens()
+        {
+            var tokens = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .ToListAsync(_db.EnrollmentTokens.OrderByDescending(t => t.ExpiresOn));
+
+            return Ok(tokens.Select(t => new
+            {
+                t.Id,
+                t.Token,
+                t.ExpiresOn,
+                t.MaxDevices,
+                t.IsActive,
+                IsExpired = t.ExpiresOn < DateTime.UtcNow
+            }));
+        }
+
         [HttpPost("tokens")]
         public async Task<IActionResult> CreateToken([FromBody] CreateEnrollmentRequest request)
         {

@@ -38,6 +38,24 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IDeviceService, SDM.Infrastructure.Services.DeviceService>();
 builder.Services.AddScoped<ICommandService, SDM.Infrastructure.Services.CommandService>();
 builder.Services.AddScoped<IPushService, SDM.Infrastructure.Services.PushService>();
+builder.Services.AddScoped<IDashboardService, SDM.Infrastructure.Services.DashboardService>();
+builder.Services.AddScoped<IPolicyService, SDM.Infrastructure.Services.PolicyService>();
+builder.Services.AddScoped<IDeviceGroupService, SDM.Infrastructure.Services.DeviceGroupService>();
+builder.Services.AddScoped<IAppService, SDM.Infrastructure.Services.AppService>();
+builder.Services.AddScoped<INetworkService, SDM.Infrastructure.Services.NetworkService>();
+builder.Services.AddScoped<IAuditLogService, SDM.Infrastructure.Services.AuditLogService>();
+builder.Services.AddScoped<IViolationService, SDM.Infrastructure.Services.ViolationService>();
+
+// CORS for React frontend (Vite dev server on :5173)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendDev", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 // JWT Authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -107,6 +125,8 @@ if (app.Environment.IsDevelopment() && (hangfireEnabled))
         job => job.ProcessPendingCommands(),
         Cron.Minutely);
 }
+
+app.UseCors("FrontendDev");
 
 // Authentication & Authorization
 app.UseAuthentication();

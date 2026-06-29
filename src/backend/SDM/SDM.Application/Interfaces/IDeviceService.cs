@@ -1,3 +1,4 @@
+using SDM.Application.DTOs.AuditLog;
 using SDM.Application.DTOs.Device;
 using SDM.Domain.Entities;
 
@@ -12,6 +13,12 @@ namespace SDM.Application.Interfaces
         Task RegisterPushTokenAsync(Guid deviceId, string token);
 
         Task<IEnumerable<Device>> GetAllAsync();
+
+        Task<PagedResult<DeviceDto>> GetPagedAsync(DeviceQueryParams query);
+
+        Task<Device?> GetByIdAsync(Guid deviceId);
+
+        Task<IEnumerable<DeviceCommand>> GetCommandsByDeviceAsync(Guid deviceId);
 
         Task<DeviceRegisterWithTokenResponse> RegisterWithTokenAsync(DeviceRegisterWithTokenRequest request);
 

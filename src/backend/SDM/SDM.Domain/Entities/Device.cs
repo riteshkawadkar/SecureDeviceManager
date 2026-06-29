@@ -1,4 +1,4 @@
-using System;
+using SDM.Domain;
 
 namespace SDM.Domain.Entities
 {
@@ -24,6 +24,10 @@ namespace SDM.Domain.Entities
 
         public Guid? GroupId { get; set; }
 
+        public string? AssignedUserName { get; set; }
+
+        public ComplianceStatus ComplianceStatus { get; set; } = ComplianceStatus.Unknown;
+
         public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedOn { get; set; }
@@ -33,5 +37,7 @@ namespace SDM.Domain.Entities
         public ICollection<DeviceHeartbeat> Heartbeats { get; set; } = new List<DeviceHeartbeat>();
 
         public ICollection<DevicePushToken> PushTokens { get; set; } = new List<DevicePushToken>();
+
+        public ICollection<DeviceViolation> Violations { get; set; } = new List<DeviceViolation>();
     }
 }

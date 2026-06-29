@@ -17,10 +17,80 @@ namespace SDM.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "8.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("SDM.Domain.Entities.AllowedDomain", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AllowedDomains");
+                });
+
+            modelBuilder.Entity("SDM.Domain.Entities.AppEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AppStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BlockReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Installs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PackageId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RequestedOn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Severity")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Apps");
+                });
 
             modelBuilder.Entity("SDM.Domain.Entities.AuditLog", b =>
                 {
@@ -58,6 +128,28 @@ namespace SDM.Infrastructure.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("SDM.Domain.Entities.BlockedDomain", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BlockedToday")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BlockedDomains");
+                });
+
             modelBuilder.Entity("SDM.Domain.Entities.Device", b =>
                 {
                     b.Property<Guid>("Id")
@@ -68,7 +160,13 @@ namespace SDM.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("AssignedUserName")
+                        .HasColumnType("text");
+
                     b.Property<int>("BatteryLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ComplianceStatus")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedOn")
@@ -233,6 +331,29 @@ namespace SDM.Infrastructure.Migrations
                     b.ToTable("DevicePushTokens");
                 });
 
+            modelBuilder.Entity("SDM.Domain.Entities.DeviceViolation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId");
+
+                    b.ToTable("DeviceViolations");
+                });
+
             modelBuilder.Entity("SDM.Domain.Entities.EnrollmentToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -263,8 +384,15 @@ namespace SDM.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -274,9 +402,95 @@ namespace SDM.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.ToTable("Policies");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000001"),
+                            Category = "Security",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = true,
+                            Name = "USB Blocking",
+                            PolicyJson = "{\"type\":\"usb_blocking\"}",
+                            Severity = "high"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000002"),
+                            Category = "Security",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = true,
+                            Name = "App Installation Control",
+                            PolicyJson = "{\"type\":\"app_install_control\"}",
+                            Severity = "high"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000003"),
+                            Category = "Network",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = true,
+                            Name = "Website Restrictions",
+                            PolicyJson = "{\"type\":\"website_restrictions\"}",
+                            Severity = "medium"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000004"),
+                            Category = "Network",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = false,
+                            Name = "Wi-Fi Control",
+                            PolicyJson = "{\"type\":\"wifi_control\"}",
+                            Severity = "medium"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000005"),
+                            Category = "Security",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = true,
+                            Name = "Bluetooth Blocking",
+                            PolicyJson = "{\"type\":\"bluetooth_blocking\"}",
+                            Severity = "medium"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000006"),
+                            Category = "DeviceFeatures",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = false,
+                            Name = "Camera Disablement",
+                            PolicyJson = "{\"type\":\"camera_disablement\"}",
+                            Severity = "low"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000007"),
+                            Category = "DeviceFeatures",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = false,
+                            Name = "Kiosk Mode",
+                            PolicyJson = "{\"type\":\"kiosk_mode\"}",
+                            Severity = "medium"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000008"),
+                            Category = "Compliance",
+                            CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsEnabled = true,
+                            Name = "Password Policy Enforcement",
+                            PolicyJson = "{\"type\":\"password_policy\",\"minLength\":8,\"complexity\":\"alphanumeric\",\"expiryDays\":90,\"maxFailedAttempts\":5}",
+                            Severity = "high"
+                        });
                 });
 
             modelBuilder.Entity("SDM.Domain.Entities.Role", b =>
@@ -357,6 +571,64 @@ namespace SDM.Infrastructure.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("SDM.Domain.Entities.VpnProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DeviceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Protocol")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Server")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VpnProfiles");
+                });
+
+            modelBuilder.Entity("SDM.Domain.Entities.WifiProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Band")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("DeviceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Security")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Ssid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WifiProfiles");
+                });
+
             modelBuilder.Entity("SDM.Domain.Entities.Device", b =>
                 {
                     b.HasOne("SDM.Domain.Entities.DeviceGroup", null)
@@ -397,6 +669,17 @@ namespace SDM.Infrastructure.Migrations
                     b.Navigation("Device");
                 });
 
+            modelBuilder.Entity("SDM.Domain.Entities.DeviceViolation", b =>
+                {
+                    b.HasOne("SDM.Domain.Entities.Device", "Device")
+                        .WithMany("Violations")
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Device");
+                });
+
             modelBuilder.Entity("SDM.Domain.Entities.User", b =>
                 {
                     b.HasOne("SDM.Domain.Entities.Role", "Role")
@@ -415,6 +698,8 @@ namespace SDM.Infrastructure.Migrations
                     b.Navigation("Heartbeats");
 
                     b.Navigation("PushTokens");
+
+                    b.Navigation("Violations");
                 });
 
             modelBuilder.Entity("SDM.Domain.Entities.DeviceGroup", b =>

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SDM.Application.DTOs.AuditLog;
 using SDM.Application.DTOs.Device;
 using Microsoft.Extensions.Logging;
 using SDM.Application.Interfaces;
@@ -122,6 +123,63 @@ namespace SDM.Infrastructure.Services
         {
             return await _db.Devices
                 .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<PagedResult<DeviceDto>> GetPagedAsync(DeviceQueryParams query)
+        {
+            var q = _db.Devices.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrEmpty(query.Search))
+                q = q.Where(d => d.DeviceIdentifier.Contains(query.Search) ||
+                                 d.Model.Contains(query.Search) ||
+                                 d.SerialNumber.Contains(query.Search) ||
+                                 (d.AssignedUserName != null && d.AssignedUserName.Contains(query.Search)));
+
+            if (!string.IsNullOrEmpty(query.AndroidVersion))
+                q = q.Where(d => d.AndroidVersion == query.AndroidVersion);
+
+            if (!string.IsNullOrEmpty(query.Status) && Enum.TryParse<DeviceStatus>(query.Status, true, out var statusEnum))
+                q = q.Where(d => d.Status == statusEnum);
+
+            var total = await q.CountAsync();
+            var items = await q
+                .OrderByDescending(d => d.LastSeen)
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
+                .Select(d => new DeviceDto
+                {
+                    Id = d.Id,
+                    DeviceIdentifier = d.DeviceIdentifier,
+                    SerialNumber = d.SerialNumber,
+                    Manufacturer = d.Manufacturer,
+                    Model = d.Model,
+                    AndroidVersion = d.AndroidVersion,
+                    BatteryLevel = d.BatteryLevel,
+                    LastSeen = d.LastSeen,
+                    Status = d.Status,
+                    ComplianceStatus = d.ComplianceStatus,
+                    AssignedUserName = d.AssignedUserName,
+                    GroupId = d.GroupId,
+                    CreatedOn = d.CreatedOn,
+                    UpdatedOn = d.UpdatedOn
+                })
+                .ToListAsync();
+
+            return new PagedResult<DeviceDto> { Items = items, Total = total, Page = query.Page, PageSize = query.PageSize };
+        }
+
+        public async Task<Device?> GetByIdAsync(Guid deviceId)
+        {
+            return await _db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Id == deviceId);
+        }
+
+        public async Task<IEnumerable<DeviceCommand>> GetCommandsByDeviceAsync(Guid deviceId)
+        {
+            return await _db.DeviceCommands
+                .AsNoTracking()
+                .Where(c => c.DeviceId == deviceId)
+                .OrderByDescending(c => c.CreatedOn)
                 .ToListAsync();
         }
 
