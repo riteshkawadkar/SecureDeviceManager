@@ -76,11 +76,22 @@ namespace SDM.Infrastructure.Services
 
         public async Task ReportCommandStatusAsync(Guid deviceId, Guid commandId, bool success)
         {
+            var now = DateTime.UtcNow;
+
             var cmd = await _db.DeviceCommands.FirstOrDefaultAsync(c => c.Id == commandId && c.DeviceId == deviceId);
             if (cmd == null) throw new Exception("Command not found");
 
             cmd.Status = success ? CommandStatus.Executed : CommandStatus.Failed;
-            cmd.ExecutedOn = DateTime.UtcNow;
+            cmd.ExecutedOn = now;
+
+            // The device just called back — it is reachable, so refresh its presence.
+            var device = await _db.Devices.FindAsync(deviceId);
+            if (device != null)
+            {
+                device.LastSeen = now;
+                device.Status = DeviceStatus.Online;
+                device.UpdatedOn = now;
+            }
 
             await _db.SaveChangesAsync();
         }
