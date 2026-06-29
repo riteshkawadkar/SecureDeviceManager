@@ -14,12 +14,14 @@ namespace SDM.Infrastructure.Services
         private readonly ApplicationDbContext _db;
         private readonly SDM.Application.Interfaces.IJwtTokenGenerator _jwtGenerator;
         private readonly ILogger<DeviceService> _logger;
+        private readonly SDM.Application.Interfaces.IPushService _pushService;
 
-        public DeviceService(ApplicationDbContext db, SDM.Application.Interfaces.IJwtTokenGenerator jwtGenerator, ILogger<DeviceService> logger)
+        public DeviceService(ApplicationDbContext db, SDM.Application.Interfaces.IJwtTokenGenerator jwtGenerator, ILogger<DeviceService> logger, SDM.Application.Interfaces.IPushService pushService)
         {
             _db = db;
             _jwtGenerator = jwtGenerator;
             _logger = logger;
+            _pushService = pushService;
         }
 
         public async Task<Device> RegisterAsync(DeviceRegisterRequest request)
@@ -73,7 +75,7 @@ namespace SDM.Infrastructure.Services
         {
             var device = await _db.Devices.FindAsync(deviceId);
             if (device == null)
-                throw new Exception("Device not found");
+                throw new KeyNotFoundException("Device not found");
 
             device.BatteryLevel = request.Battery;
             device.LastSeen = DateTime.UtcNow;
@@ -307,6 +309,17 @@ namespace SDM.Infrastructure.Services
         {
             var device = await _db.Devices.FindAsync(deviceId);
             if (device == null) throw new Exception("Device not found");
+
+            // Notify the device to unenroll before removing its token from the DB.
+            // Best-effort: a failure here does not block the delete.
+            try
+            {
+                await _pushService.SendToDeviceAsync(deviceId, "Device Removed", "This device has been removed from management.", new { action = "UNENROLL" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not send UNENROLL FCM for device {DeviceId}", deviceId);
+            }
 
             // DeviceCommand and DeviceHeartbeat cascade via OnModelCreating.
             // DevicePushToken has no cascade configured, so remove explicitly.

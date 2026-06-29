@@ -718,6 +718,7 @@
 
         <!-- ── Unenroll Card ──────────────────────────────────────── -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardUnenroll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardCornerRadius="14dp"

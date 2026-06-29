@@ -29,8 +29,10 @@ import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.messaging.FirebaseMessaging
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONObject
@@ -47,6 +49,14 @@ import android.widget.TextView
 import com.google.android.material.card.MaterialCardView
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import android.graphics.BitmapFactory
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.LuminanceSource
+import com.google.zxing.MultiFormatReader
+import com.google.zxing.RGBLuminanceSource
+import com.google.zxing.common.HybridBinarizer
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
@@ -124,6 +134,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tilEnrollmentToken: TextInputLayout
     private lateinit var etEnrollmentToken: TextInputEditText
     private lateinit var btnUnenroll: MaterialButton
+    private lateinit var cardUnenroll: MaterialCardView
     private lateinit var cardEnrollDevice: MaterialCardView
     private lateinit var layoutEnrolled: LinearLayout
     private lateinit var tvViewPolicies: TextView
@@ -147,22 +158,60 @@ class MainActivity : AppCompatActivity() {
 
     private val barcodeLauncher = registerForActivityResult(ScanContract()) { result ->
         if (result.contents != null) {
-            val scanned = result.contents
-            try {
-                val uri = Uri.parse(scanned)
-                val token = uri.getQueryParameter("token")
-                if (token != null) {
-                    serverUrl = determineBaseUrl(uri)
-                    etEnrollmentToken.setText(token)
-                    performEnrollment(token)
+            handleScannedContent(result.contents)
+        }
+    }
+
+    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            lifecycleScope.launch {
+                val qrContent = withContext(Dispatchers.IO) { decodeQRCode(it) }
+                if (qrContent != null) {
+                    handleScannedContent(qrContent)
                 } else {
-                    etEnrollmentToken.setText(scanned)
-                    performEnrollment(scanned)
+                    Toast.makeText(this@MainActivity, "No QR code found in image", Toast.LENGTH_SHORT).show()
                 }
-            } catch (e: Exception) {
+            }
+        }
+    }
+
+    private fun decodeQRCode(uri: Uri): String? {
+        return try {
+            val inputStream = contentResolver.openInputStream(uri) ?: return null
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            if (bitmap == null) return null
+
+            val width = bitmap.width
+            val height = bitmap.height
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val source: LuminanceSource = RGBLuminanceSource(width, height, pixels)
+            val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
+            val reader = MultiFormatReader()
+            val result = reader.decode(binaryBitmap)
+            result.text
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error decoding QR code", e)
+            null
+        }
+    }
+
+    private fun handleScannedContent(scanned: String) {
+        try {
+            val uri = Uri.parse(scanned)
+            val token = uri.getQueryParameter("token")
+            if (token != null) {
+                serverUrl = determineBaseUrl(uri)
+                etEnrollmentToken.setText(token)
+                performEnrollment(token)
+            } else {
                 etEnrollmentToken.setText(scanned)
                 performEnrollment(scanned)
             }
+        } catch (e: Exception) {
+            etEnrollmentToken.setText(scanned)
+            performEnrollment(scanned)
         }
     }
 
@@ -182,6 +231,7 @@ class MainActivity : AppCompatActivity() {
         tilEnrollmentToken = findViewById(R.id.tilEnrollmentToken)
         etEnrollmentToken = findViewById(R.id.etEnrollmentToken)
         btnUnenroll = findViewById(R.id.btnUnenroll)
+        cardUnenroll = findViewById(R.id.cardUnenroll)
 
         cardEnrollDevice = findViewById(R.id.cardEnrollDevice)
         layoutEnrolled = findViewById(R.id.layoutEnrolled)
@@ -225,13 +275,26 @@ class MainActivity : AppCompatActivity() {
         btnRequestAdmin.setOnClickListener { promptDeviceAdmin() }
 
         btnScanQr.setOnClickListener {
-            val options = ScanOptions()
-                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                .setPrompt("Scan MDM enrollment QR code")
-                .setBeepEnabled(false)
-                .setBarcodeImageEnabled(false)
-                .setOrientationLocked(false)
-            barcodeLauncher.launch(options)
+            val options = arrayOf("Scan with Camera", "Choose from Gallery/File")
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Enrollment QR Code")
+                .setItems(options) { _, which ->
+                    when (which) {
+                        0 -> {
+                            val scanOptions = ScanOptions()
+                                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                .setPrompt("Scan MDM enrollment QR code")
+                                .setBeepEnabled(false)
+                                .setBarcodeImageEnabled(false)
+                                .setOrientationLocked(false)
+                            barcodeLauncher.launch(scanOptions)
+                        }
+                        1 -> {
+                            pickImageLauncher.launch("image/*")
+                        }
+                    }
+                }
+                .show()
         }
 
         tilEnrollmentToken.setEndIconOnClickListener {
@@ -253,7 +316,16 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
 
-        btnUnenroll.setOnClickListener { performUnenroll() }
+        btnUnenroll.setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Unenroll Device")
+                .setMessage("Are you sure you want to unenroll this device? This will remove all corporate policies and disconnect it from the MDM server.")
+                .setPositiveButton("Unenroll") { _, _ ->
+                    performUnenroll()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
     }
 
     override fun onResume() {
@@ -309,6 +381,7 @@ class MainActivity : AppCompatActivity() {
             tvDetailDeviceId.text = deviceId
             cardEnrollDevice.visibility = View.GONE
             layoutEnrolled.visibility = View.VISIBLE
+            cardUnenroll.visibility = View.VISIBLE
         } else {
             tvEnrollmentBadge.text = "● Not Enrolled"
             tvEnrollmentBadge.setTextColor(Color.parseColor("#D97706"))
@@ -318,6 +391,7 @@ class MainActivity : AppCompatActivity() {
             tvDetailDeviceId.text = "Not enrolled"
             cardEnrollDevice.visibility = View.VISIBLE
             layoutEnrolled.visibility = View.GONE
+            cardUnenroll.visibility = View.GONE
         }
 
         btnUnenroll.isEnabled = enrolled

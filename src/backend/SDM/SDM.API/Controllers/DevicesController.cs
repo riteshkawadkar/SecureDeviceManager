@@ -38,8 +38,16 @@ namespace SDM.API.Controllers
         [HttpPost("{id:guid}/heartbeat")]
         public async Task<IActionResult> Heartbeat([FromRoute] Guid id, [FromBody] HeartbeatRequest request)
         {
-            await _deviceService.UpdateHeartbeatAsync(id, request);
-            return NoContent();
+            try
+            {
+                await _deviceService.UpdateHeartbeatAsync(id, request);
+                return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                // Device was removed from management. Signal the agent to unenroll.
+                return NotFound(new { message = "Device not found. Please re-enroll." });
+            }
         }
 
         [HttpPost("{id:guid}/push-token")]
