@@ -83,7 +83,7 @@ export default function DeviceDetailPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => cmdMutation.mutate({ type: 'LockDevice' })}
+            onClick={() => cmdMutation.mutate({ type: 'LockScreen' })}
             disabled={cmdMutation.isPending}
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
           >
