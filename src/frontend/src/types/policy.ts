@@ -15,3 +15,10 @@ export interface CreatePolicyRequest {
   category: string;
   severity: string;
 }
+
+export interface UpdatePolicyRequest {
+  name: string;
+  policyJson: string;
+  category: string;
+  severity: string;
+}

@@ -5,6 +5,7 @@ import DashboardPage from './pages/Dashboard/DashboardPage';
 import DevicesPage from './pages/Devices/DevicesPage';
 import DeviceDetailPage from './pages/DeviceDetail/DeviceDetailPage';
 import PoliciesPage from './pages/Policies/PoliciesPage';
+import PolicyDetailPage from './pages/Policies/PolicyDetailPage';
 import RemoteActionsPage from './pages/RemoteActions/RemoteActionsPage';
 import AppManagementPage from './pages/AppManagement/AppManagementPage';
 import NetworkPage from './pages/Network/NetworkPage';
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="devices/enroll" element={<EnrollDevicePage />} />
         <Route path="devices/:id" element={<DeviceDetailPage />} />
         <Route path="policies" element={<PoliciesPage />} />
+        <Route path="policies/:id" element={<PolicyDetailPage />} />
         <Route path="remote-actions" element={<RemoteActionsPage />} />
         <Route path="app-management" element={<AppManagementPage />} />
         <Route path="network" element={<NetworkPage />} />
