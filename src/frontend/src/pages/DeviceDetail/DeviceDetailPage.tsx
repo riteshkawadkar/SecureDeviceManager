@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Lock, Trash2, RotateCw, Bell, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck,
@@ -9,9 +9,14 @@ import {
 import { getDevice, listViolations, listCommands, sendCommand } from '../../api/devices';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import Modal from '../../components/ui/Modal';
+import Toggle from '../../components/ui/Toggle';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection, getIncompatiblePolicies } from '../../data/policyDefs';
 import type { DeviceCommand } from '../../types/device';
+
+/** Policies that map to a single on/off command with no extra parameters — safe to flip from a switch. */
+const TOGGLEABLE_POLICY_DEFS = POLICY_DEFS.filter((d) => (d.restrictionKey || d.binaryAction) && !d.params);
+const TOGGLEABLE_POLICY_IDS = new Set(TOGGLEABLE_POLICY_DEFS.map((d) => d.id));
 
 const COMMAND_STATUS_BADGE: Record<number, { label: string; cls: string }> = {
   0: { label: 'Queued', cls: 'bg-gray-100 text-gray-500' },
@@ -184,6 +189,19 @@ export default function DeviceDetailPage() {
     return appliedPolicies.filter(({ def }) => incompatibleIds.has(def.id));
   }, [appliedPolicies, device?.androidVersion]);
 
+  // Currently-applied policies that need extra parameters (password rules, web filter lists,
+  // kiosk package) — not safe to flip from a bare switch, shown read-only instead.
+  const otherAppliedPolicies = useMemo(
+    () => appliedPolicies.filter(({ def }) => !TOGGLEABLE_POLICY_IDS.has(def.id)),
+    [appliedPolicies],
+  );
+
+  const appliedByDefId = useMemo(() => new Map(policyLatestState.map((p) => [p.def.id, p])), [policyLatestState]);
+  const activeToggleCount = TOGGLEABLE_POLICY_DEFS.filter((def) => {
+    const entry = appliedByDefId.get(def.id);
+    return entry ? isCurrentlyApplied(entry) : false;
+  }).length;
+
   const cmdMutation = useMutation({
     mutationFn: ({ type, payload }: { type: string; payload?: object }) => sendCommand(id!, type, payload),
     onSuccess: () => {
@@ -191,6 +209,28 @@ export default function DeviceDetailPage() {
       qc.invalidateQueries({ queryKey: ['commands', id] });
     },
   });
+
+  // Each toggle fires its own standalone command — no shared batchId — so it lands as its
+  // own row in Policy History, satisfying "every change must be audited as its own event".
+  const [pendingPolicyIds, setPendingPolicyIds] = useState<Set<string>>(new Set());
+  const policyToggleMutation = useMutation({
+    mutationFn: async ({ def, turnOn }: { def: typeof POLICY_DEFS[number]; turnOn: boolean }) => {
+      const commandType = def.restrictionKey ? 'SetUserRestriction' : turnOn ? def.binaryAction!.trueCmd : def.binaryAction!.falseCmd;
+      const payload = def.restrictionKey ? { restriction: def.restrictionKey, enabled: turnOn } : {};
+      await sendCommand(id!, commandType, payload);
+    },
+    onMutate: ({ def }) => setPendingPolicyIds((prev) => new Set(prev).add(def.id)),
+    onSettled: (_data, _err, { def }) => {
+      setPendingPolicyIds((prev) => { const next = new Set(prev); next.delete(def.id); return next; });
+      qc.invalidateQueries({ queryKey: ['commands', id] });
+    },
+  });
+
+  function togglePolicy(def: typeof POLICY_DEFS[number]) {
+    const entry = appliedByDefId.get(def.id);
+    const currentlyOn = entry ? isCurrentlyApplied(entry) : false;
+    policyToggleMutation.mutate({ def, turnOn: !currentlyOn });
+  }
 
   function openActionsMenu(e: React.MouseEvent<HTMLButtonElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -370,18 +410,18 @@ export default function DeviceDetailPage() {
         </div>
 
         <div className="space-y-5">
-          {/* Applied Policies */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-700">Applied Policies</h3>
-              {appliedPolicies.length > 0 && (
-                <span className="inline-flex items-center gap-1 text-xs text-gray-400">
-                  <ShieldCheck size={13} /> {appliedPolicies.length} deployed
-                </span>
-              )}
+          {/* Applied Policies — live toggles; each flip is its own immediate, audited command */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-gray-900">Applied Policies</h3>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">{activeToggleCount} of {TOGGLEABLE_POLICY_DEFS.length} active</span>
+                <Link to="/bulk-policies" className="text-xs font-semibold text-blue-600 hover:underline">Manage</Link>
+              </div>
             </div>
+
             {incompatibleApplied.length > 0 && (
-              <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-100">
+              <div className="mb-3 px-3 py-2 bg-amber-50 rounded-lg">
                 <p className="text-[11px] text-amber-700 leading-relaxed">
                   <AlertTriangle size={11} className="inline mr-1 -mt-0.5" />
                   {incompatibleApplied.length} applied polic{incompatibleApplied.length > 1 ? 'ies' : 'y'} won&rsquo;t
@@ -389,38 +429,62 @@ export default function DeviceDetailPage() {
                 </p>
               </div>
             )}
-            <div className="divide-y divide-gray-50">
-              {appliedPolicies.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4">No policies have been deployed to this device yet</p>
-              ) : (
-                appliedPolicies.map(({ def, latest, restrictive }) => {
-                  const Icon = def.icon;
-                  const directionLabel = restrictive
-                    ? def.restrictionLabels?.restrict ?? def.binaryAction?.trueLabel ?? 'Applied'
-                    : def.restrictionLabels?.lift ?? def.binaryAction?.falseLabel ?? 'Lifted';
-                  const statusBadge = COMMAND_STATUS_BADGE[latest.status] ?? COMMAND_STATUS_BADGE[0];
-                  return (
-                    <div key={def.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Icon size={15} className="text-gray-400 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm text-gray-700 truncate">{def.label}</p>
-                          <p className="text-xs text-gray-400">{formatRelativeTime(latest.executedOn ?? latest.createdOn)}</p>
-                        </div>
+
+            <div className="space-y-2.5">
+              {TOGGLEABLE_POLICY_DEFS.map((def) => {
+                const Icon = def.icon;
+                const entry = appliedByDefId.get(def.id);
+                const isOn = entry ? isCurrentlyApplied(entry) : false;
+                const pending = pendingPolicyIds.has(def.id);
+                return (
+                  <div
+                    key={def.id}
+                    className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-colors ${
+                      isOn ? 'bg-green-50' : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                        isOn ? 'bg-green-600' : 'bg-gray-300'
+                      }`}>
+                        <Icon size={16} className="text-white" />
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className={`text-xs font-semibold ${restrictive ? 'text-amber-600' : 'text-gray-400'}`}>
+                      <span className={`text-sm font-semibold truncate ${isOn ? 'text-green-700' : 'text-gray-500'}`}>
+                        {def.label}
+                      </span>
+                    </div>
+                    <Toggle checked={isOn} onChange={() => togglePolicy(def)} disabled={pending} />
+                  </div>
+                );
+              })}
+            </div>
+
+            {otherAppliedPolicies.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                  Other applied policies (configured via Bulk Deploy)
+                </p>
+                <div className="space-y-1.5">
+                  {otherAppliedPolicies.map(({ def, restrictive }) => {
+                    const Icon = def.icon;
+                    const directionLabel = restrictive
+                      ? def.restrictionLabels?.restrict ?? def.binaryAction?.trueLabel ?? 'Applied'
+                      : def.restrictionLabels?.lift ?? def.binaryAction?.falseLabel ?? 'Lifted';
+                    return (
+                      <div key={def.id} className="flex items-center justify-between gap-2 px-1 py-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Icon size={13} className="text-gray-400 shrink-0" />
+                          <span className="text-xs text-gray-600 truncate">{def.label}</span>
+                        </div>
+                        <span className={`text-[11px] font-medium shrink-0 ${restrictive ? 'text-amber-600' : 'text-gray-400'}`}>
                           {directionLabel}
                         </span>
-                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium ${statusBadge.cls}`}>
-                          {statusBadge.label}
-                        </span>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Violations */}
