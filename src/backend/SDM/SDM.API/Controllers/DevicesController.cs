@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SDM.Application.DTOs.Device;
 using SDM.Application.Interfaces;
+using SDM.Domain.Constants;
 
 namespace SDM.API.Controllers
 {
@@ -73,7 +74,7 @@ namespace SDM.API.Controllers
             public string FcmToken { get; set; } = string.Empty;
         }
 
-        [Authorize]
+        [Authorize(Roles = Roles.AllRoles)]
         [HttpGet]
         public async Task<IActionResult> GetAll(
             [FromQuery] string? search,
@@ -93,6 +94,7 @@ namespace SDM.API.Controllers
             return Ok(devices);
         }
 
+        [Authorize(Roles = Roles.AllRoles)]
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById([FromRoute] Guid id)
         {
@@ -101,6 +103,7 @@ namespace SDM.API.Controllers
             return Ok(device);
         }
 
+        [Authorize(Roles = Roles.AllRoles)]
         [HttpGet("{id:guid}/commands")]
         public async Task<IActionResult> GetCommands([FromRoute] Guid id)
         {
@@ -108,6 +111,7 @@ namespace SDM.API.Controllers
             return Ok(commands);
         }
 
+        [Authorize(Roles = Roles.AllRoles)]
         [HttpGet("{id:guid}/violations")]
         public async Task<IActionResult> GetViolations([FromRoute] Guid id)
         {
@@ -115,6 +119,7 @@ namespace SDM.API.Controllers
             return Ok(violations);
         }
 
+        [Authorize(Roles = Roles.OperatorAndUp)]
         [HttpPost("{id:guid}/violations")]
         public async Task<IActionResult> AddViolation([FromRoute] Guid id, [FromBody] AddViolationRequest request)
         {
@@ -122,7 +127,7 @@ namespace SDM.API.Controllers
             return CreatedAtAction(nameof(GetViolations), new { id }, violation);
         }
 
-        [Authorize]
+        [Authorize(Roles = Roles.OperatorAndUp)]
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete([FromRoute] Guid id)
         {

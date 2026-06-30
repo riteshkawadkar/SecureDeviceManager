@@ -153,6 +153,33 @@ This removes the device, its push tokens, commands, and heartbeats from the data
 
 ---
 
+## Roles & Permissions
+
+User accounts (`Users` table) are each assigned one fixed role (`Roles` table, seeded by migration). Permissions are enforced via `[Authorize(Roles=...)]` on controllers — there is no per-user/custom permission editor.
+
+| Role | Can do |
+|---|---|
+| **Viewer** | Read-only: view dashboard, devices, policies, apps, device groups, audit logs |
+| **Operator** | Viewer + issue device commands / remote actions, manage device groups |
+| **Admin** | Operator + manage policies, apps, enrollment tokens, and users (cannot grant the SuperAdmin role) |
+| **SuperAdmin** | Admin + can grant/revoke the SuperAdmin role on other users |
+
+User management lives under `/api/users` (Admin/SuperAdmin only): `GET /api/users`, `GET /api/users/{id}`, `POST /api/users`, `PUT /api/users/{id}`, `DELETE /api/users/{id}`, `POST /api/users/{id}/reset-password`, `GET /api/users/roles`. Every user (any role) can self-service via `GET /api/auth/me` and `PUT /api/auth/me/password`.
+
+Safety guards in `UserService`: a user can't delete or deactivate their own account, can't change their own role, and the last active SuperAdmin can't be deleted, deactivated, or demoted.
+
+### Default seeded account
+
+A fresh database is seeded (via the `SeedDefaultAdminUser` migration) with one bootstrap SuperAdmin so the system is usable on first run:
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@sdm.local` | `Admin@12345` | SuperAdmin |
+
+**Change this password immediately after first login** (`PUT /api/auth/me/password`, or via the Users page in the frontend).
+
+---
+
 ## API Reference
 
 | Method | Endpoint | Auth | Description |
@@ -162,14 +189,12 @@ This removes the device, its push tokens, commands, and heartbeats from the data
 | POST | `/api/devices/register-with-token` | None | Enroll device with token |
 | GET | `/api/devices` | None | List all devices |
 | GET | `/api/devices/{id}` | JWT | Get device by ID |
-| DELETE | `/api/devices/{id}` | None* | Delete/unenroll device |
+| DELETE | `/api/devices/{id}` | Operator+ JWT | Delete/unenroll device |
 | POST | `/api/devices/{id}/heartbeat` | Device JWT | Update battery/lastSeen |
 | POST | `/api/devices/{id}/push-token` | Device JWT | Register FCM token |
 | POST | `/api/devices/update-fcm-token` | Device JWT | Refresh FCM token |
 | POST | `/api/devices/{id}/commands` | JWT | Send command to device |
 | POST | `/api/devices/{id}/commands/{cid}/status` | Device JWT | Report command result |
-
-\* `DELETE /api/devices/{id}` is `[AllowAnonymous]` for development convenience. Restrict with an admin role before production.
 
 ---
 

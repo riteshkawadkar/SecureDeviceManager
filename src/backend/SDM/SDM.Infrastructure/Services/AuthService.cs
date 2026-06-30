@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SDM.Application.DTOs.Auth;
+using SDM.Application.DTOs.Users;
 using SDM.Application.Interfaces;
-using SDM.Domain.Entities;
 using SDM.Infrastructure.Data;
 
 namespace SDM.Infrastructure.Services;
@@ -17,13 +17,13 @@ public class AuthService : IAuthService
         _jwtTokenGenerator = jwtTokenGenerator;
     }
 
-        public async Task<LoginResponse> LoginAsync(LoginRequest request)
+    public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
         var user = await _db.Users
             .Include(x => x.Role)
             .FirstOrDefaultAsync(x => x.Email == request.Email);
 
-        if (user == null)
+        if (user == null || !user.IsActive)
             throw new SDM.Application.Exceptions.AuthenticationException("Invalid credentials");
 
         var valid = BCrypt.Net.BCrypt.Verify(
@@ -37,41 +37,18 @@ public class AuthService : IAuthService
 
         return new LoginResponse
         {
-            Token = token
+            Token = token,
+            User = new UserDto
+            {
+                Id = user.Id,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Email = user.Email,
+                RoleId = user.RoleId,
+                RoleName = user.Role.Name,
+                IsActive = user.IsActive,
+                CreatedOn = user.CreatedOn
+            }
         };
-    }
-
-    public async Task RegisterAsync(RegisterRequest request)
-    {
-        var exists = await _db.Users
-            .AnyAsync(x => x.Email == request.Email);
-
-        if (exists)
-            throw new Exception("Email already exists");
-
-        // Ensure new user has a valid RoleId (Roles are seeded by migrations)
-        var defaultRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "Viewer");
-        if (defaultRole == null)
-        {
-            // Fallback: if expected role not found, pick any existing role
-            defaultRole = await _db.Roles.FirstOrDefaultAsync();
-            if (defaultRole == null)
-                throw new Exception("No roles found in the database. Ensure migrations and seed data have been applied.");
-        }
-
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            Email = request.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            CreatedOn = DateTime.UtcNow,
-            RoleId = defaultRole.Id
-        };
-
-        _db.Users.Add(user);
-
-        await _db.SaveChangesAsync();
     }
 }

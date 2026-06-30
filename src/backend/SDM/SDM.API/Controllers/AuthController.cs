@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using SDM.Application.DTOs.Auth;
+using SDM.Application.DTOs.Users;
 using SDM.Application.Interfaces;
 
 namespace SDM.API.Controllers
@@ -10,10 +12,12 @@ namespace SDM.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IUserService _userService;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IUserService userService)
         {
             _authService = authService;
+            _userService = userService;
         }
 
         [AllowAnonymous]
@@ -30,13 +34,38 @@ namespace SDM.API.Controllers
             }
         }
 
-        [AllowAnonymous]
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMe()
         {
-            await _authService.RegisterAsync(request);
+            var user = await _userService.GetByIdAsync(GetUserId());
+            if (user == null) return NotFound();
+            return Ok(user);
+        }
 
-            return Ok();
+        [Authorize]
+        [HttpPut("me/password")]
+        public async Task<IActionResult> ChangeMyPassword([FromBody] ChangePasswordRequest request)
+        {
+            try
+            {
+                await _userService.ChangePasswordAsync(GetUserId(), request);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        private Guid GetUserId()
+        {
+            var sub = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            return Guid.TryParse(sub, out var id) ? id : Guid.Empty;
         }
     }
 }

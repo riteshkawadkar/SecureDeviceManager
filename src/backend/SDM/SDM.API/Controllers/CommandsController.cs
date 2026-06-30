@@ -5,6 +5,7 @@ using System.Text.Json;
 namespace SDM.API.Controllers
 {
     using Microsoft.AspNetCore.Authorization;
+    using SDM.Domain.Constants;
 
     [ApiController]
     [Route("api/devices/{deviceId:guid}/[controller]")]
@@ -24,6 +25,7 @@ namespace SDM.API.Controllers
             public JsonElement Payload { get; set; }
         }
 
+        [Authorize(Roles = Roles.OperatorAndUp)]
         [HttpPost]
         public async Task<IActionResult> Create([FromRoute] Guid deviceId, [FromBody] CreateCommandRequest request)
         {
@@ -47,6 +49,7 @@ namespace SDM.API.Controllers
             return CreatedAtAction(nameof(GetById), new { deviceId = deviceId, id = cmd.Id }, resp);
         }
 
+        [Authorize(Roles = Roles.OperatorAndUp)]
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById([FromRoute] Guid deviceId, [FromRoute] Guid id)
         {
@@ -56,6 +59,7 @@ namespace SDM.API.Controllers
             return Ok(new { Id = id, DeviceId = deviceId });
         }
 
+        [Authorize(Roles = "Device")]
         [HttpPost("{id:guid}/status")]
         public async Task<IActionResult> ReportStatus([FromRoute] Guid deviceId, [FromRoute] Guid id, [FromBody] ReportStatusRequest request)
         {

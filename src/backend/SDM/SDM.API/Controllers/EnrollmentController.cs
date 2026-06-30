@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using SDM.Application.DTOs.Enrollment;
+using SDM.Domain.Constants;
 using SDM.Infrastructure.Data;
 
 namespace SDM.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [AllowAnonymous]
+    [Authorize(Roles = Roles.AdminAndUp)]
     public class EnrollmentController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
@@ -63,7 +64,6 @@ namespace SDM.API.Controllers
             return Content(html, "text/html");
         }
 
-        [Authorize]
         [HttpGet("tokens")]
         public async Task<IActionResult> GetTokens()
         {

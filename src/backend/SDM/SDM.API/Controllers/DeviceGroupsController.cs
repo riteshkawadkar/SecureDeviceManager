@@ -2,12 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SDM.Application.DTOs.DeviceGroup;
 using SDM.Application.Interfaces;
+using SDM.Domain.Constants;
 
 namespace SDM.API.Controllers
 {
     [ApiController]
     [Route("api/device-groups")]
-    [Authorize]
+    [Authorize(Roles = Roles.AllRoles)]
     public class DeviceGroupsController : ControllerBase
     {
         private readonly IDeviceGroupService _groupService;
@@ -32,6 +33,7 @@ namespace SDM.API.Controllers
             return Ok(group);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateDeviceGroupRequest request)
         {
@@ -39,6 +41,7 @@ namespace SDM.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = group.Id }, group);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdateDeviceGroupRequest request)
         {
@@ -47,6 +50,7 @@ namespace SDM.API.Controllers
             return Ok(group);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete([FromRoute] Guid id)
         {

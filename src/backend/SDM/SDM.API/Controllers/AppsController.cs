@@ -2,13 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SDM.Application.DTOs.App;
 using SDM.Application.Interfaces;
+using SDM.Domain.Constants;
 using SDM.Domain.Entities;
 
 namespace SDM.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Roles = Roles.AllRoles)]
     public class AppsController : ControllerBase
     {
         private readonly IAppService _appService;
@@ -37,6 +38,7 @@ namespace SDM.API.Controllers
             return Ok(app);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateAppRequest request)
         {
@@ -44,6 +46,7 @@ namespace SDM.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = app.Id }, app);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdateAppRequest request)
         {
@@ -52,6 +55,7 @@ namespace SDM.API.Controllers
             return Ok(app);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPatch("{id:guid}/approve")]
         public async Task<IActionResult> Approve([FromRoute] Guid id)
         {
@@ -60,6 +64,7 @@ namespace SDM.API.Controllers
             return Ok(app);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPatch("{id:guid}/revoke")]
         public async Task<IActionResult> Revoke([FromRoute] Guid id)
         {
@@ -68,6 +73,7 @@ namespace SDM.API.Controllers
             return Ok(app);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPatch("{id:guid}/deny")]
         public async Task<IActionResult> Deny([FromRoute] Guid id)
         {
@@ -76,6 +82,7 @@ namespace SDM.API.Controllers
             return Ok(app);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete([FromRoute] Guid id)
         {

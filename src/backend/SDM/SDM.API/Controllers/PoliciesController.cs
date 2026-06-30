@@ -2,12 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SDM.Application.DTOs.Policy;
 using SDM.Application.Interfaces;
+using SDM.Domain.Constants;
 
 namespace SDM.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Roles = Roles.AllRoles)]
     public class PoliciesController : ControllerBase
     {
         private readonly IPolicyService _policyService;
@@ -32,6 +33,7 @@ namespace SDM.API.Controllers
             return Ok(policy);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreatePolicyRequest request)
         {
@@ -39,6 +41,7 @@ namespace SDM.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = policy.Id }, policy);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdatePolicyRequest request)
         {
@@ -47,6 +50,7 @@ namespace SDM.API.Controllers
             return Ok(policy);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPatch("{id:guid}/toggle")]
         public async Task<IActionResult> Toggle([FromRoute] Guid id)
         {
@@ -55,6 +59,7 @@ namespace SDM.API.Controllers
             return Ok(policy);
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete([FromRoute] Guid id)
         {
@@ -63,6 +68,7 @@ namespace SDM.API.Controllers
             return NoContent();
         }
 
+        [Authorize(Roles = Roles.AdminAndUp)]
         [HttpPost("{id:guid}/enforce")]
         public async Task<IActionResult> Enforce([FromRoute] Guid id)
         {

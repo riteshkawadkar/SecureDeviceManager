@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SDM.Application.Interfaces;
+using SDM.Domain.Constants;
 
 namespace SDM.API.Controllers
 {
     [ApiController]
     [Route("api/audit-logs")]
-    [Authorize]
+    [Authorize(Roles = Roles.AllRoles)]
     public class AuditLogsController : ControllerBase
     {
         private readonly IAuditLogService _auditLogService;

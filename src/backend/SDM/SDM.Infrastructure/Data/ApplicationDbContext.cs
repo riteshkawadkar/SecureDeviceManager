@@ -48,6 +48,21 @@ namespace SDM.Infrastructure.Data
                 new Role { Id = operatorRoleId, Name = "Operator" },
                 new Role { Id = viewerRoleId, Name = "Viewer" });
 
+            // Default bootstrap SuperAdmin so a fresh database is usable.
+            // Email: admin@sdm.local / Password: Admin@12345 - change immediately after first login.
+            modelBuilder.Entity<User>().HasData(
+                new User
+                {
+                    Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
+                    FirstName = "System",
+                    LastName = "Administrator",
+                    Email = "admin@sdm.local",
+                    PasswordHash = "$2a$11$WX.tAdF162DZWC/vVXT6zO4iHgyZjcRBJ3GGE9jGfOIj.3k0z7Uuq",
+                    RoleId = superAdminRoleId,
+                    IsActive = true,
+                    CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                });
+
             modelBuilder.Entity<User>()
                 .HasIndex(x => x.Email)
                 .IsUnique();

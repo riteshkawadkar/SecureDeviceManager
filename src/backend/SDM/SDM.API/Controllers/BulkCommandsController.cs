@@ -1,12 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SDM.Application.DTOs.Command;
 using SDM.Application.Interfaces;
+using SDM.Domain.Constants;
 using System.Text.Json;
 
 namespace SDM.API.Controllers
 {
     [ApiController]
     [Route("api/commands")]
+    [Authorize(Roles = Roles.OperatorAndUp)]
     public class BulkCommandsController : ControllerBase
     {
         private readonly ICommandService _commandService;

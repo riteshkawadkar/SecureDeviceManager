@@ -22,6 +22,7 @@ builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection("Jwt"));
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUserService, SDM.Infrastructure.Services.UserService>();
 
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 

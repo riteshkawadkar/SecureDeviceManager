@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import { login } from '../../api/auth';
+import { useAuth } from '../../context/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { login: setAuth } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await login({ email, password });
-      localStorage.setItem('sdm_token', res.token);
+      setAuth(res);
       navigate('/dashboard');
     } catch {
       setError('Invalid email or password. Please try again.');

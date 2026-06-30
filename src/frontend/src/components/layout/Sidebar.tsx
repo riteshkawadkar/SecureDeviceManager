@@ -1,8 +1,9 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Smartphone, Shield, Zap, AppWindow,
-  FileBarChart, Settings, HelpCircle, LogOut, Layers, X,
+  FileBarChart, Settings, HelpCircle, LogOut, Layers, X, Users,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
   {
@@ -20,6 +21,7 @@ const navItems = [
   {
     group: 'SYSTEM',
     items: [
+      { to: '/users', icon: Users, label: 'Users', adminOnly: true },
       { to: '/settings', icon: Settings, label: 'Settings' },
       { to: '/support', icon: HelpCircle, label: 'Support' },
     ],
@@ -33,9 +35,11 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate();
+  const { user, hasRole, logout } = useAuth();
+  const isAdmin = hasRole('SuperAdmin', 'Admin');
 
   function handleLogout() {
-    localStorage.removeItem('sdm_token');
+    logout();
     navigate('/login');
   }
 
@@ -85,7 +89,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 {group}
               </p>
               <div className="space-y-0.5">
-                {items.map(({ to, icon: Icon, label }) => (
+                {items.filter((item) => !item.adminOnly || isAdmin).map(({ to, icon: Icon, label }) => (
                   <NavLink
                     key={to}
                     to={to}
@@ -111,11 +115,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="px-3 py-3 border-t border-gray-700/60 shrink-0">
           <div className="flex items-center gap-2.5 px-2 py-2 mb-1">
             <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold shrink-0" aria-hidden="true">
-              A
+              {user ? `${user.firstName[0]}${user.lastName[0]}` : '?'}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-white truncate">Admin</p>
-              <p className="text-[11px] text-gray-400 truncate">IT Administrator</p>
+              <p className="text-xs font-semibold text-white truncate">
+                {user ? `${user.firstName} ${user.lastName}` : 'Unknown user'}
+              </p>
+              <p className="text-[11px] text-gray-400 truncate">{user?.roleName ?? ''}</p>
             </div>
           </div>
           <button
