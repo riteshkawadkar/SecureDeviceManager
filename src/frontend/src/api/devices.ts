@@ -1,5 +1,5 @@
 import client from './client';
-import type { Device, DeviceCommand, DeviceViolation, AuditLogEntry, PagedResult } from '../types/device';
+import type { Device, DeviceCommand, DeviceViolation, PagedResult } from '../types/device';
 
 export interface DeviceQueryParams {
   search?: string;
@@ -23,11 +23,6 @@ export const listCommands = (deviceId: string) =>
 
 export const listViolations = (deviceId: string) =>
   client.get<DeviceViolation[]>(`/devices/${deviceId}/violations`).then((r) => r.data);
-
-export const listDeviceAuditLogs = (deviceId: string, page = 1, pageSize = 20) =>
-  client
-    .get<PagedResult<AuditLogEntry>>(`/devices/${deviceId}/audit-logs`, { params: { page, pageSize } })
-    .then((r) => r.data);
 
 export const sendCommand = (deviceId: string, commandType: string, payload: object = {}) =>
   client.post(`/devices/${deviceId}/commands`, { commandType, payload }).then((r) => r.data);

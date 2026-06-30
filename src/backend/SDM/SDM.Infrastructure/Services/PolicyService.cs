@@ -74,7 +74,7 @@ namespace SDM.Infrastructure.Services
             return ToDto(policy);
         }
 
-        public async Task<PolicyEnforceResult> EnforceAsync(Guid id)
+        public async Task<PolicyEnforceResult> EnforceAsync(Guid id, Guid? actorUserId = null)
         {
             var policy = await _db.Policies.FindAsync(id)
                 ?? throw new KeyNotFoundException($"Policy {id} not found.");
@@ -88,7 +88,7 @@ namespace SDM.Infrastructure.Services
             {
                 try
                 {
-                    await _commandService.CreateCommandAsync(device.Id, policy.CommandType, "{}");
+                    await _commandService.CreateCommandAsync(device.Id, policy.CommandType, "{}", actorUserId);
                     sent++;
                 }
                 catch { /* best-effort: continue to next device */ }

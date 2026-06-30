@@ -74,7 +74,10 @@ namespace SDM.API.Controllers
         {
             try
             {
-                var result = await _policyService.EnforceAsync(id);
+                var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+                Guid? actorUserId = Guid.TryParse(sub, out var actorId) ? actorId : null;
+
+                var result = await _policyService.EnforceAsync(id, actorUserId);
                 return Ok(result);
             }
             catch (KeyNotFoundException)

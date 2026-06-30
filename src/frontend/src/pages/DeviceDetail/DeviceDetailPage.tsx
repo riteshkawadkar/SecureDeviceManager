@@ -4,12 +4,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Lock, Trash2, RotateCw, Bell, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck,
-  ChevronDown, ChevronRight, History, ScrollText,
+  ChevronDown, History,
 } from 'lucide-react';
-import { getDevice, listViolations, listCommands, listDeviceAuditLogs, sendCommand } from '../../api/devices';
+import { getDevice, listViolations, listCommands, sendCommand } from '../../api/devices';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import Modal from '../../components/ui/Modal';
-import Pagination from '../../components/ui/Pagination';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection, getIncompatiblePolicies } from '../../data/policyDefs';
 import type { DeviceCommand } from '../../types/device';
@@ -28,15 +27,15 @@ const DEVICE_COMMANDS = [
   { type: 'WipeData', label: 'Remote Wipe', desc: 'Full factory reset — irreversible', icon: Trash2 },
 ];
 
-const AUDIT_PAGE_SIZE = 10;
+const COMMAND_FAILED = 3;
 
 type AppliedPolicy = { def: typeof POLICY_DEFS[number]; latest: DeviceCommand; restrictive: boolean };
-type PolicyHistoryEntry = { def: typeof POLICY_DEFS[number]; cmd: DeviceCommand; restrictive: boolean };
 
 function parsePayload(payload: string): unknown {
   try { return JSON.parse(payload); } catch { return payload; }
 }
 
+/** Latest known command per policy — the full catalogue of every policy this device has ever touched. */
 function buildAppliedPolicies(commands: DeviceCommand[] | undefined): AppliedPolicy[] {
   const latestByDefId = new Map<string, DeviceCommand>();
   for (const cmd of commands ?? []) {
@@ -56,24 +55,9 @@ function buildAppliedPolicies(commands: DeviceCommand[] | undefined): AppliedPol
   return result;
 }
 
-/** Full reverse-chronological history of every policy-related command, not just the latest per policy. */
-function buildPolicyHistory(commands: DeviceCommand[] | undefined): PolicyHistoryEntry[] {
-  const entries: PolicyHistoryEntry[] = [];
-  for (const cmd of commands ?? []) {
-    const def = findPolicyDefForCommand(cmd.commandType, parsePayload(cmd.payload));
-    if (!def) continue;
-    entries.push({ def, cmd, restrictive: isRestrictiveDirection(def, cmd.commandType, parsePayload(cmd.payload)) });
-  }
-  return entries.sort((a, b) => new Date(b.cmd.createdOn).getTime() - new Date(a.cmd.createdOn).getTime());
-}
-
-function commandPayloadPreview(payload: string): string {
-  try {
-    const parsed = JSON.parse(payload);
-    return parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0 ? JSON.stringify(parsed) : '';
-  } catch {
-    return payload;
-  }
+/** A policy counts as "currently applied" when its latest direction is restrictive and that command didn't fail. */
+function isCurrentlyApplied({ restrictive, latest }: AppliedPolicy): boolean {
+  return restrictive && latest.status !== COMMAND_FAILED;
 }
 
 export default function DeviceDetailPage() {
@@ -85,9 +69,6 @@ export default function DeviceDetailPage() {
   const [actionsMenuPos, setActionsMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
-  const [logsTab, setLogsTab] = useState<'commands' | 'audit'>('commands');
-  const [auditPage, setAuditPage] = useState(1);
-  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
 
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
@@ -112,20 +93,14 @@ export default function DeviceDetailPage() {
     queryFn: () => listCommands(id!),
     refetchInterval: 30_000,
   });
-  const { data: auditLogs } = useQuery({
-    queryKey: ['device-audit-logs', id, auditPage],
-    queryFn: () => listDeviceAuditLogs(id!, auditPage, AUDIT_PAGE_SIZE),
-    enabled: logsTab === 'audit',
-  });
 
-  const appliedPolicies = useMemo(() => buildAppliedPolicies(commands), [commands]);
-  const policyHistory = useMemo(() => buildPolicyHistory(commands), [commands]);
-  const commandLog = useMemo(
-    () => [...(commands ?? [])].sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime()),
-    [commands],
-  );
+  // Latest known command per policy — used both for the "currently applied" card (filtered
+  // below to active restrictions only) and the full Policy History table (every policy ever
+  // touched, regardless of whether it's still in effect).
+  const policyLatestState = useMemo(() => buildAppliedPolicies(commands), [commands]);
+  const appliedPolicies = useMemo(() => policyLatestState.filter(isCurrentlyApplied), [policyLatestState]);
 
-  // Of the policies actually applied to this device, which ones won't get their full effect
+  // Of the policies currently applied to this device, which ones won't get their full effect
   // on its reported Android version (e.g. Wi-Fi Toggle on Android 9 only blocks config
   // changes, not the quick-settings toggle, since that needs Android 12+) — flagged here
   // rather than stored at enrollment so it never goes stale if the device's OS changes.
@@ -400,156 +375,58 @@ export default function DeviceDetailPage() {
         </div>
       </div>
 
-      {/* Policy History — full reverse-chronological timeline, vs. the latest-only Applied Policies card above */}
+      {/* Policy History — every policy this device has ever touched: when, by whom, and whether it's currently applied */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             <History size={14} className="text-gray-400" /> Policy History
           </h3>
-          {policyHistory.length > 0 && <span className="text-xs text-gray-400">{policyHistory.length} events</span>}
+          {policyLatestState.length > 0 && <span className="text-xs text-gray-400">{policyLatestState.length} polic{policyLatestState.length > 1 ? 'ies' : 'y'}</span>}
         </div>
-        <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-          {policyHistory.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-6">No policy commands have been sent to this device yet</p>
-          ) : (
-            policyHistory.map(({ def, cmd, restrictive }) => {
-              const Icon = def.icon;
-              const directionLabel = restrictive
-                ? def.restrictionLabels?.restrict ?? def.binaryAction?.trueLabel ?? 'Applied'
-                : def.restrictionLabels?.lift ?? def.binaryAction?.falseLabel ?? 'Lifted';
-              const statusBadge = COMMAND_STATUS_BADGE[cmd.status] ?? COMMAND_STATUS_BADGE[0];
-              return (
-                <div key={cmd.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Icon size={15} className="text-gray-400 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm text-gray-700 truncate">{def.label}</p>
-                      <p className="text-xs text-gray-400" title={formatDate(cmd.createdOn)}>
-                        {formatRelativeTime(cmd.executedOn ?? cmd.createdOn)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className={`text-xs font-semibold ${restrictive ? 'text-amber-600' : 'text-gray-400'}`}>
-                      {directionLabel}
-                    </span>
-                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium ${statusBadge.cls}`}>
-                      {statusBadge.label}
-                    </span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Logs — Command Log (full command history) + Audit Log (device lifecycle + command-creation events) */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <ScrollText size={14} className="text-gray-400" /> Logs
-          </h3>
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            <button
-              onClick={() => setLogsTab('commands')}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                logsTab === 'commands' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Command Log
-            </button>
-            <button
-              onClick={() => setLogsTab('audit')}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                logsTab === 'audit' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Audit Log
-            </button>
-          </div>
-        </div>
-
-        {logsTab === 'commands' ? (
-          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-            {commandLog.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-6">No commands sent to this device yet</p>
-            ) : (
-              commandLog.map((cmd) => {
-                const statusBadge = COMMAND_STATUS_BADGE[cmd.status] ?? COMMAND_STATUS_BADGE[0];
-                const payloadPreview = commandPayloadPreview(cmd.payload);
-                return (
-                  <div key={cmd.id} className="flex items-start justify-between gap-3 px-5 py-2.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{cmd.commandType}</p>
-                      {payloadPreview && (
-                        <p className="text-xs text-gray-400 font-mono truncate max-w-md">{payloadPreview}</p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {formatDate(cmd.createdOn)} · {cmd.retryCount > 0 ? `${cmd.retryCount} retr${cmd.retryCount > 1 ? 'ies' : 'y'}` : 'no retries'}
-                      </p>
-                    </div>
-                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0 ${statusBadge.cls}`}>
-                      {statusBadge.label}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
+        {policyLatestState.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-6">No policy commands have been sent to this device yet</p>
         ) : (
-          <>
-            <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-              {(auditLogs?.items.length ?? 0) === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-6">No audit events recorded for this device yet</p>
-              ) : (
-                auditLogs!.items.map((log) => {
-                  const hasDetails = !!(log.oldValue || log.newValue);
-                  const expanded = expandedAuditId === log.id;
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/70">
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Policy</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">When</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">By</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Applied</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {policyLatestState.map((entry) => {
+                  const { def, latest } = entry;
+                  const Icon = def.icon;
+                  const applied = isCurrentlyApplied(entry);
+                  const failed = latest.status === COMMAND_FAILED;
                   return (
-                    <div key={log.id} className="px-5 py-2.5">
-                      <button
-                        onClick={() => hasDetails && setExpandedAuditId(expanded ? null : log.id)}
-                        className={`w-full flex items-center justify-between gap-3 text-left ${hasDetails ? 'cursor-pointer' : 'cursor-default'}`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          {hasDetails && (
-                            <ChevronRight size={12} className={`text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-                          )}
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-800">{log.action}</p>
-                            <p className="text-xs text-gray-400">{log.entityName}</p>
-                          </div>
+                    <tr key={def.id}>
+                      <td className="px-5 py-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Icon size={15} className="text-gray-400 shrink-0" />
+                          <span className="text-gray-800 font-medium truncate">{def.label}</span>
                         </div>
-                        <p className="text-xs text-gray-400 shrink-0">{formatDate(log.timestamp)}</p>
-                      </button>
-                      {expanded && hasDetails && (
-                        <div className="mt-2 ml-4 space-y-1.5">
-                          {log.oldValue && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-gray-400 uppercase">Before</p>
-                              <pre className="text-[11px] text-gray-600 bg-gray-50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all">{log.oldValue}</pre>
-                            </div>
-                          )}
-                          {log.newValue && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-gray-400 uppercase">After</p>
-                              <pre className="text-[11px] text-gray-600 bg-gray-50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all">{log.newValue}</pre>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                      </td>
+                      <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap" title={formatDate(latest.createdOn)}>
+                        {formatRelativeTime(latest.executedOn ?? latest.createdOn)}
+                      </td>
+                      <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{latest.createdByName ?? '—'}</td>
+                      <td className="px-5 py-2.5">
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                          applied ? 'bg-green-100 text-green-700' : failed ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {applied ? 'Applied' : failed ? 'Failed' : 'Not Applied'}
+                        </span>
+                      </td>
+                    </tr>
                   );
-                })
-              )}
-            </div>
-            {auditLogs && auditLogs.total > AUDIT_PAGE_SIZE && (
-              <div className="flex justify-center px-5 py-3 border-t border-gray-100">
-                <Pagination page={auditPage} pageSize={AUDIT_PAGE_SIZE} total={auditLogs.total} onChange={setAuditPage} />
-              </div>
-            )}
-          </>
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

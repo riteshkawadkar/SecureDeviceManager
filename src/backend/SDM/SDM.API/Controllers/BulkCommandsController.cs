@@ -40,7 +40,10 @@ namespace SDM.API.Controllers
                 : request.Payload.ValueKind == JsonValueKind.Undefined ? "{}"
                 : request.Payload.ToString();
 
-            var result = await _commandService.CreateBulkCommandAsync(request.DeviceIds, request.CommandType, payloadStr);
+            var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+            Guid? actorUserId = Guid.TryParse(sub, out var actorId) ? actorId : null;
+
+            var result = await _commandService.CreateBulkCommandAsync(request.DeviceIds, request.CommandType, payloadStr, actorUserId);
             return Ok(result);
         }
     }

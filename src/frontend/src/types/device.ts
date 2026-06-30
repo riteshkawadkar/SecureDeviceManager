@@ -38,6 +38,8 @@ export interface DeviceCommand {
   maxRetries: number;
   createdOn: string;
   executedOn: string | null;
+  createdByUserId: string | null;
+  createdByName: string | null;
 }
 
 export interface DeviceViolation {
@@ -58,15 +60,4 @@ export interface PagedResult<T> {
   total: number;
   page: number;
   pageSize: number;
-}
-
-export interface AuditLogEntry {
-  id: string;
-  userId: string | null;
-  action: string;
-  entityName: string;
-  entityId: string | null;
-  oldValue: string | null;
-  newValue: string | null;
-  timestamp: string;
 }

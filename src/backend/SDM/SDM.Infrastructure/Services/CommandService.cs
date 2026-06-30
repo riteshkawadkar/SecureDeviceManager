@@ -18,7 +18,7 @@ namespace SDM.Infrastructure.Services
             _pushService = pushService;
         }
 
-        public async Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload)
+        public async Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload, Guid? actorUserId = null)
         {
             var device = await _db.Devices.FindAsync(deviceId);
             if (device == null) throw new Exception("Device not found");
@@ -63,6 +63,7 @@ namespace SDM.Infrastructure.Services
             _db.AuditLogs.Add(new SDM.Domain.Entities.AuditLog
             {
                 Id = Guid.NewGuid(),
+                UserId = actorUserId,
                 Action = "CommandCreated",
                 EntityName = "DeviceCommand",
                 EntityId = cmd.Id,
@@ -75,14 +76,14 @@ namespace SDM.Infrastructure.Services
             return cmd;
         }
 
-        public async Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload)
+        public async Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload, Guid? actorUserId = null)
         {
             var results = new List<BulkCommandDeviceResult>();
             foreach (var deviceId in deviceIds)
             {
                 try
                 {
-                    var cmd = await CreateCommandAsync(deviceId, commandType, payload);
+                    var cmd = await CreateCommandAsync(deviceId, commandType, payload, actorUserId);
                     results.Add(new BulkCommandDeviceResult { DeviceId = deviceId, Success = true, CommandId = cmd.Id });
                 }
                 catch (Exception ex)

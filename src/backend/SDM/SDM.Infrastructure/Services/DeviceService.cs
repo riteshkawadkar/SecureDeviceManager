@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SDM.Application.DTOs.AuditLog;
+using SDM.Application.DTOs.Command;
 using SDM.Application.DTOs.Device;
 using Microsoft.Extensions.Logging;
 using SDM.Application.Interfaces;
@@ -177,13 +178,41 @@ namespace SDM.Infrastructure.Services
             return await _db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Id == deviceId);
         }
 
-        public async Task<IEnumerable<DeviceCommand>> GetCommandsByDeviceAsync(Guid deviceId)
+        public async Task<IEnumerable<DeviceCommandDto>> GetCommandsByDeviceAsync(Guid deviceId)
         {
-            return await _db.DeviceCommands
+            var commands = await _db.DeviceCommands
                 .AsNoTracking()
                 .Where(c => c.DeviceId == deviceId)
                 .OrderByDescending(c => c.CreatedOn)
                 .ToListAsync();
+
+            // Resolve "who issued this command" from the CommandCreated audit log entry rather than
+            // a column on DeviceCommand itself, since that's where the actor's user id is already captured.
+            var commandIds = commands.Select(c => c.Id).ToList();
+            var creatorByCommandId = await _db.AuditLogs
+                .AsNoTracking()
+                .Where(a => a.EntityName == "DeviceCommand" && a.UserId != null && a.EntityId != null && commandIds.Contains(a.EntityId.Value))
+                .Join(_db.Users.AsNoTracking(), a => a.UserId, u => u.Id, (a, u) => new { CommandId = a.EntityId!.Value, u.Id, Name = u.FirstName + " " + u.LastName })
+                .ToDictionaryAsync(x => x.CommandId, x => x);
+
+            return commands.Select(c =>
+            {
+                creatorByCommandId.TryGetValue(c.Id, out var creator);
+                return new DeviceCommandDto
+                {
+                    Id = c.Id,
+                    DeviceId = c.DeviceId,
+                    CommandType = c.CommandType,
+                    Payload = c.Payload,
+                    Status = (int)c.Status,
+                    RetryCount = c.RetryCount,
+                    MaxRetries = c.MaxRetries,
+                    CreatedOn = c.CreatedOn,
+                    ExecutedOn = c.ExecutedOn,
+                    CreatedByUserId = creator?.Id,
+                    CreatedByName = creator?.Name,
+                };
+            });
         }
 
         public async Task<DeviceRegisterWithTokenResponse> RegisterWithTokenAsync(DeviceRegisterWithTokenRequest request)

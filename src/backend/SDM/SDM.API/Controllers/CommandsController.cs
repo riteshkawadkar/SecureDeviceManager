@@ -33,7 +33,10 @@ namespace SDM.API.Controllers
                 ? request.Payload.GetString() ?? string.Empty
                 : request.Payload.ToString();
 
-            var cmd = await _commandService.CreateCommandAsync(deviceId, request.CommandType, payloadStr);
+            var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+            Guid? actorUserId = Guid.TryParse(sub, out var actorId) ? actorId : null;
+
+            var cmd = await _commandService.CreateCommandAsync(deviceId, request.CommandType, payloadStr, actorUserId);
             // Map to DTO to avoid circular JSON references
             var resp = new SDM.Application.DTOs.Command.CommandResponse
             {

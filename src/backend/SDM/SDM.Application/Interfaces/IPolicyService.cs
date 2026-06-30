@@ -10,6 +10,6 @@ namespace SDM.Application.Interfaces
         Task<PolicyDto?> UpdateAsync(Guid id, UpdatePolicyRequest request);
         Task<PolicyDto?> ToggleAsync(Guid id);
         Task<bool> DeleteAsync(Guid id);
-        Task<PolicyEnforceResult> EnforceAsync(Guid id);
+        Task<PolicyEnforceResult> EnforceAsync(Guid id, Guid? actorUserId = null);
     }
 }
