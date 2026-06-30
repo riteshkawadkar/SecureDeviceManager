@@ -15,7 +15,7 @@ import type { PolicyDef } from '../../data/policyDefs';
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
-type TemplateId = 'securityBaseline' | 'kioskMode' | 'byod' | 'networkLockdown';
+type TemplateId = 'securityBaseline' | 'kioskMode' | 'appWebControl' | 'networkLockdown';
 
 type PolicyItemState = {
   enabled: boolean;
@@ -71,9 +71,9 @@ const TEMPLATES: Record<TemplateId, TemplateDef> = {
       locationSharing: { enabled: true, action: true,  params: {} },
     },
   },
-  byod: {
-    label: 'BYOD Policy',
-    description: 'Restrict installs and uninstalls, apply web filters, lock accounts for personal devices',
+  appWebControl: {
+    label: 'App & Web Control',
+    description: 'Restrict installs and uninstalls, apply web filters, lock account modification',
     icon: Package,
     settings: {
       appInstall:          { enabled: true, action: true, params: {} },
