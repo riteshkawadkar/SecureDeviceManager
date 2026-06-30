@@ -19,5 +19,15 @@ namespace SDM.Application.Interfaces
         // The most recent Enterprise row, if any — used by the admin console to show
         // connection status (None / Pending / Active / Failed).
         Task<EnterpriseDto?> GetCurrentEnterpriseAsync();
+
+        // Ensures the preset Policy for the given ManagementMode exists in Google (create-or-update,
+        // PATCH is idempotent), then creates a fresh enrollment token referencing it. Returns the
+        // token value + QR JSON for the admin to scan during device provisioning.
+        Task<EnrollmentTokenDto> CreateEnrollmentTokenAsync(SDM.Domain.ManagementMode managementMode);
+
+        // Pulls enterprises.devices.list and upserts matching rows into the local Device table
+        // (matched by GoogleDeviceName). New AE devices get created with the ManagementMode
+        // inferred from Google's own Device.ManagementMode field (DEVICE_OWNER/PROFILE_OWNER).
+        Task<DeviceSyncResultDto> SyncDevicesAsync();
     }
 }

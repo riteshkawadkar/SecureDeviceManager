@@ -130,6 +130,12 @@ if (app.Environment.IsDevelopment() && (hangfireEnabled))
         "process-pending-commands",
         job => job.ProcessPendingCommands(),
         Cron.Minutely);
+    // schedule recurring job to sync Android Enterprise devices every 5 minutes
+    // (no-ops quietly when no Active enterprise binding is configured)
+    RecurringJob.AddOrUpdate<SDM.Infrastructure.Services.HangfireJobs>(
+        "sync-enterprise-devices",
+        job => job.SyncEnterpriseDevices(),
+        "*/5 * * * *");
 }
 
 app.UseCors("FrontendDev");

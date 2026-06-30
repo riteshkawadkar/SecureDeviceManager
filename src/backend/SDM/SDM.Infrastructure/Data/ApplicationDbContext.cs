@@ -41,6 +41,8 @@ namespace SDM.Infrastructure.Data
 
         public DbSet<SDM.Domain.Entities.Enterprise> Enterprises => Set<SDM.Domain.Entities.Enterprise>();
 
+        public DbSet<SDM.Domain.Entities.EnterpriseEnrollmentToken> EnterpriseEnrollmentTokens => Set<SDM.Domain.Entities.EnterpriseEnrollmentToken>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

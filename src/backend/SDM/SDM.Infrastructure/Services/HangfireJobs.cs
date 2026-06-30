@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SDM.Infrastructure.Data;
 using SDM.Application.Interfaces;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -11,12 +12,18 @@ namespace SDM.Infrastructure.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly IPushService _pushService;
+        private readonly IAndroidEnterpriseService _androidEnterpriseService;
         private readonly ILogger<HangfireJobs> _logger;
 
-        public HangfireJobs(ApplicationDbContext db, IPushService pushService, ILogger<HangfireJobs> logger)
+        public HangfireJobs(
+            ApplicationDbContext db,
+            IPushService pushService,
+            IAndroidEnterpriseService androidEnterpriseService,
+            ILogger<HangfireJobs> logger)
         {
             _db = db;
             _pushService = pushService;
+            _androidEnterpriseService = androidEnterpriseService;
             _logger = logger;
         }
 
@@ -65,6 +72,28 @@ namespace SDM.Infrastructure.Services
             }
 
             await _db.SaveChangesAsync();
+        }
+
+        // Called by Hangfire recurring job. No-ops quietly when Android Enterprise isn't
+        // configured for this deployment (most CustomAgent-only installs) — that's the
+        // expected steady state, not an error.
+        public async Task SyncEnterpriseDevices()
+        {
+            try
+            {
+                var result = await _androidEnterpriseService.SyncDevicesAsync();
+                _logger.LogInformation(
+                    "Hangfire: Android Enterprise device sync — {Total} from Google, {Created} created, {Updated} updated",
+                    result.TotalFromGoogle, result.Created, result.Updated);
+            }
+            catch (InvalidOperationException)
+            {
+                _logger.LogDebug("Hangfire: Android Enterprise device sync skipped — no Active enterprise binding");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Hangfire: Android Enterprise device sync failed");
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using SDM.Application.DTOs.Enterprise;
 using SDM.Application.Interfaces;
 using SDM.Application.Settings;
 using SDM.Domain.Constants;
@@ -61,6 +62,22 @@ namespace SDM.API.Controllers
             {
                 return Redirect($"{_settings.FrontendRedirectUrl}?enterprise=error");
             }
+        }
+
+        [Authorize(Roles = Roles.AdminAndUp)]
+        [HttpPost("enrollment-tokens")]
+        public async Task<IActionResult> CreateEnrollmentToken([FromBody] CreateEnrollmentTokenRequest request)
+        {
+            var result = await _enterpriseService.CreateEnrollmentTokenAsync(request.ManagementMode);
+            return Ok(result);
+        }
+
+        [Authorize(Roles = Roles.OperatorAndUp)]
+        [HttpPost("devices/sync")]
+        public async Task<IActionResult> SyncDevices()
+        {
+            var result = await _enterpriseService.SyncDevicesAsync();
+            return Ok(result);
         }
     }
 }

@@ -28,6 +28,12 @@ namespace SDM.Domain.Entities
 
         public ComplianceStatus ComplianceStatus { get; set; } = ComplianceStatus.Unknown;
 
+        public ManagementMode ManagementMode { get; set; } = ManagementMode.CustomAgent;
+
+        // Android Management API device resource name (e.g. "enterprises/LC.../devices/abc123"),
+        // set only for AndroidEnterprise* devices. Used for Policy/issueCommand calls in Phase 3.
+        public string? GoogleDeviceName { get; set; }
+
         public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedOn { get; set; }
