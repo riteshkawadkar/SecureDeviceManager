@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SDM.Domain;
 
 namespace SDM.Domain.Entities
 {
@@ -14,6 +15,10 @@ namespace SDM.Domain.Entities
         public string Name { get; set; } = string.Empty;
 
         public string PackageId { get; set; } = string.Empty;
+
+        // SideloadUrl (default): ApkUrl hosts the APK, pushed via the custom agent.
+        // PlayStore: PackageId is the Managed Play package name, pushed via AE Policy.applications[].
+        public AppPackageSource Source { get; set; } = AppPackageSource.SideloadUrl;
 
         public string Version { get; set; } = string.Empty;
 

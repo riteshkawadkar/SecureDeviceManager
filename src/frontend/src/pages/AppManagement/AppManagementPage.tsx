@@ -8,7 +8,7 @@ import {
 import { listApps, approveApp, revokeApp, denyApp } from '../../api/apps';
 import { listAppPackages, deleteAppPackage } from '../../api/appPackages';
 import { AppStatus } from '../../types/app';
-import type { AppPackage } from '../../types/appPackage';
+import { AppPackageSource, type AppPackage } from '../../types/appPackage';
 import StatCard from '../../components/ui/StatCard';
 import SeverityBadge from '../../components/ui/SeverityBadge';
 import AppFormModal from './AppFormModal';
@@ -201,7 +201,14 @@ function AppCatalogTab() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-gray-400 text-xs font-mono">{app.packageId}</td>
+                  <td className="px-5 py-3">
+                    <p className="text-gray-400 text-xs font-mono">{app.packageId}</p>
+                    <span className={`inline-flex mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      app.source === AppPackageSource.PlayStore ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {app.source === AppPackageSource.PlayStore ? 'Managed Play' : 'Sideload'}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 text-gray-600 text-xs">{app.version}</td>
                   <td className="px-5 py-3">
                     <button

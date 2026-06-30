@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import { createAppPackage, updateAppPackage } from '../../api/appPackages';
-import type { AppPackage } from '../../types/appPackage';
+import { AppPackageSource, type AppPackage } from '../../types/appPackage';
 
 interface Props {
   app?: AppPackage;
@@ -16,6 +16,7 @@ export default function AppFormModal({ app, onClose }: Props) {
 
   const [name, setName] = useState(app?.name ?? '');
   const [packageId, setPackageId] = useState(app?.packageId ?? '');
+  const [source, setSource] = useState<AppPackageSource>(app?.source ?? AppPackageSource.SideloadUrl);
   const [version, setVersion] = useState(app?.version ?? '');
   const [versionCode, setVersionCode] = useState(app?.versionCode?.toString() ?? '');
   const [apkUrl, setApkUrl] = useState(app?.apkUrl ?? '');
@@ -31,6 +32,7 @@ export default function AppFormModal({ app, onClose }: Props) {
       const payload = {
         name,
         packageId,
+        source,
         version,
         versionCode: versionCode ? Number(versionCode) : null,
         apkUrl,
@@ -74,9 +76,42 @@ export default function AppFormModal({ app, onClose }: Props) {
           />
         </div>
 
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Source</label>
+          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50 w-full">
+            <button
+              type="button"
+              disabled={isEdit}
+              onClick={() => setSource(AppPackageSource.SideloadUrl)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors disabled:opacity-60 ${
+                source === AppPackageSource.SideloadUrl ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+              }`}
+            >
+              Sideload (S3/URL)
+            </button>
+            <button
+              type="button"
+              disabled={isEdit}
+              onClick={() => setSource(AppPackageSource.PlayStore)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors disabled:opacity-60 ${
+                source === AppPackageSource.PlayStore ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+              }`}
+            >
+              Managed Play Store
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            {source === AppPackageSource.PlayStore
+              ? 'Pushed via Android Enterprise Policy — only targetable at Android Enterprise devices.'
+              : 'Hosted APK pushed via the custom agent — only targetable at CustomAgent devices.'}
+          </p>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Package ID</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              {source === AppPackageSource.PlayStore ? 'Play Store package name' : 'Package ID'}
+            </label>
             <input
               value={packageId}
               onChange={(e) => setPackageId(e.target.value)}
@@ -120,17 +155,19 @@ export default function AppFormModal({ app, onClose }: Props) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">APK URL</label>
-          <input
-            value={apkUrl}
-            onChange={(e) => setApkUrl(e.target.value)}
-            required
-            placeholder="https://cdn.example.com/app-1.0.5.apk"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <p className="text-xs text-gray-400 mt-1">Hosted APK link the device downloads and silently installs.</p>
-        </div>
+        {source === AppPackageSource.SideloadUrl && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">APK URL</label>
+            <input
+              value={apkUrl}
+              onChange={(e) => setApkUrl(e.target.value)}
+              required
+              placeholder="https://cdn.example.com/app-1.0.5.apk"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Hosted APK link the device downloads and silently installs.</p>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5">Icon URL (optional)</label>

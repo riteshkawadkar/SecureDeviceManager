@@ -25,6 +25,11 @@ namespace SDM.Domain.Entities
 
         public Guid? CommandId { get; set; }
 
+        // Set when the push was skipped outright (e.g. a PlayStore-sourced app targeted at a
+        // CustomAgent device). Null CommandId + null FailureReason means an Android Enterprise
+        // device managed via Policy.applications[] instead of a DeviceCommand.
+        public string? FailureReason { get; set; }
+
         public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
 
         public AppPackage? AppPackage { get; set; }

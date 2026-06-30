@@ -38,6 +38,10 @@ android-agent/*.aab
 *.jks
 *.keystore
 
+# SSH/TLS private keys — keep out of git
+*.pem
+*.key
+
 # ── Docker ───────────────────────────────────────────────────────────────────
 # Keep docker-compose.yml in git; ignore override files with secrets
 docker-compose.override.yml

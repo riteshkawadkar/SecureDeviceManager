@@ -16,5 +16,11 @@ namespace SDM.Application.Settings
         // Where to send the admin's browser after we've processed the callback
         // (a page in the frontend, e.g. /settings/enterprise).
         public string FrontendRedirectUrl { get; set; } = string.Empty;
+
+        // Expected "aud" claim on the OIDC bearer token Google attaches to Pub/Sub push
+        // requests — set this to the publicly reachable URL of GoogleEnterprisePubSubController
+        // (the same value configured as the push subscription's audience). Left empty by default,
+        // which makes the webhook reject everything (fail closed) until a real subscription exists.
+        public string PubSubAudience { get; set; } = string.Empty;
     }
 }

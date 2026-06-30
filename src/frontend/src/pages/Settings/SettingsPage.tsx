@@ -1,4 +1,5 @@
 import { Settings, Server, Bell, Shield, Key } from 'lucide-react';
+import AndroidEnterpriseSection from './AndroidEnterpriseSection';
 
 const sections = [
   { title: 'General', desc: 'Organization name, timezone, language', icon: Settings, color: 'text-gray-600', bg: 'bg-gray-100' },
@@ -32,6 +33,8 @@ export default function SettingsPage() {
           </div>
         ))}
       </div>
+
+      <AndroidEnterpriseSection />
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 text-center">
         <Settings size={36} className="text-gray-200 mx-auto mb-3" />

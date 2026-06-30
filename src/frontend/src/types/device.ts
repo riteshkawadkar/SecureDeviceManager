@@ -11,6 +11,12 @@ export enum ComplianceStatus {
   Pending = 3,
 }
 
+export enum ManagementMode {
+  CustomAgent = 0,
+  AndroidEnterpriseFullyManaged = 1,
+  AndroidEnterpriseWorkProfile = 2,
+}
+
 export interface Device {
   id: string;
   deviceIdentifier: string;
@@ -24,6 +30,7 @@ export interface Device {
   complianceStatus: ComplianceStatus;
   assignedUserName: string | null;
   groupId: string | null;
+  managementMode: ManagementMode;
   createdOn: string;
   updatedOn: string | null;
 }

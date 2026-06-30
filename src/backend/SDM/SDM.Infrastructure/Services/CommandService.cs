@@ -11,11 +11,13 @@ namespace SDM.Infrastructure.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly IPushService _pushService;
+        private readonly IAndroidEnterpriseService _androidEnterpriseService;
 
-        public CommandService(ApplicationDbContext db, IPushService pushService)
+        public CommandService(ApplicationDbContext db, IPushService pushService, IAndroidEnterpriseService androidEnterpriseService)
         {
             _db = db;
             _pushService = pushService;
+            _androidEnterpriseService = androidEnterpriseService;
         }
 
         public async Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload, Guid? actorUserId = null, Guid? batchId = null)
@@ -37,25 +39,44 @@ namespace SDM.Infrastructure.Services
             _db.DeviceCommands.Add(cmd);
             await _db.SaveChangesAsync();
 
-            // Try to send push notification
-            try
+            if (device.ManagementMode != SDM.Domain.ManagementMode.CustomAgent)
             {
-                var sent = await _pushService.SendToDeviceAsync(deviceId, "command", commandType, new { commandId = cmd.Id, payload });
-                cmd.Status = sent ? CommandStatus.Sent : CommandStatus.Failed;
-                if (sent)
+                // Android Enterprise devices have no SDM agent to receive an FCM push — issue a
+                // native devices.issueCommand instead. Google's infrastructure owns delivery from
+                // here, so there's no "Sent vs delivered" retry loop like the FCM path.
+                try
                 {
-                    // leave ExecutedOn null until device reports
+                    await _androidEnterpriseService.IssueDeviceCommandAsync(deviceId, commandType);
+                    cmd.Status = CommandStatus.Sent;
                 }
-                else
+                catch
                 {
-                    // increment retry count
+                    cmd.Status = CommandStatus.Failed;
                     cmd.RetryCount++;
                 }
             }
-            catch
+            else
             {
-                cmd.Status = CommandStatus.Failed;
-                cmd.RetryCount++;
+                // Try to send push notification
+                try
+                {
+                    var sent = await _pushService.SendToDeviceAsync(deviceId, "command", commandType, new { commandId = cmd.Id, payload });
+                    cmd.Status = sent ? CommandStatus.Sent : CommandStatus.Failed;
+                    if (sent)
+                    {
+                        // leave ExecutedOn null until device reports
+                    }
+                    else
+                    {
+                        // increment retry count
+                        cmd.RetryCount++;
+                    }
+                }
+                catch
+                {
+                    cmd.Status = CommandStatus.Failed;
+                    cmd.RetryCount++;
+                }
             }
 
             await _db.SaveChangesAsync();

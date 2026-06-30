@@ -17,6 +17,7 @@ namespace SDM.Application.DTOs.Device
         public ComplianceStatus ComplianceStatus { get; set; }
         public string? AssignedUserName { get; set; }
         public Guid? GroupId { get; set; }
+        public ManagementMode ManagementMode { get; set; }
         public DateTime CreatedOn { get; set; }
         public DateTime? UpdatedOn { get; set; }
     }

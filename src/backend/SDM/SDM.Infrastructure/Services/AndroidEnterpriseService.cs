@@ -5,6 +5,7 @@ using Google.Apis.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Linq;
 using SDM.Application.DTOs.Enterprise;
 using SDM.Application.Interfaces;
 using SDM.Application.Settings;
@@ -13,6 +14,7 @@ using SDM.Infrastructure.Data;
 using GoogleEnterprise = Google.Apis.AndroidManagement.v1.Data.Enterprise;
 using GoogleDevice = Google.Apis.AndroidManagement.v1.Data.Device;
 using GoogleEnrollmentToken = Google.Apis.AndroidManagement.v1.Data.EnrollmentToken;
+using GoogleCommand = Google.Apis.AndroidManagement.v1.Data.Command;
 using Enterprise = SDM.Domain.Entities.Enterprise;
 using EnterpriseStatus = SDM.Domain.Entities.EnterpriseStatus;
 using LocalDevice = SDM.Domain.Entities.Device;
@@ -185,7 +187,10 @@ namespace SDM.Infrastructure.Services
             var client = BuildClient();
 
             var policyName = $"{enterprise.GoogleEnterpriseId}/policies/{PolicyIdFor(managementMode)}";
-            await client.Enterprises.Policies.Patch(BuildPolicy(managementMode), policyName).ExecuteAsync();
+            // Merge with whatever already exists rather than overwriting blind — apps pushed via
+            // InstallAppOnPolicyAsync/UninstallAppFromPolicyAsync must survive re-issuing tokens.
+            var policy = await GetOrBuildPolicyAsync(client, policyName, managementMode);
+            await client.Enterprises.Policies.Patch(policy, policyName).ExecuteAsync();
 
             var tokenRequest = new GoogleEnrollmentToken
             {
@@ -256,6 +261,129 @@ namespace SDM.Infrastructure.Services
             await _db.SaveChangesAsync();
 
             return new DeviceSyncResultDto { TotalFromGoogle = googleDevices.Count, Created = created, Updated = updated };
+        }
+
+        public async Task SyncSingleDeviceAsync(string googleDeviceName)
+        {
+            var client = BuildClient();
+
+            GoogleDevice gd;
+            try
+            {
+                gd = await client.Enterprises.Devices.Get(googleDeviceName).ExecuteAsync();
+            }
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return; // deprovisioned/deleted on Google's side — nothing to sync
+            }
+
+            var device = await _db.Devices.FirstOrDefaultAsync(d => d.GoogleDeviceName == googleDeviceName);
+            if (device == null)
+            {
+                device = new LocalDevice { Id = Guid.NewGuid(), GoogleDeviceName = googleDeviceName, CreatedOn = DateTime.UtcNow };
+                _db.Devices.Add(device);
+            }
+            ApplyGoogleDevice(device, gd);
+            ApplyApplicationReports(device.Id, gd.ApplicationReports);
+
+            await _db.SaveChangesAsync();
+        }
+
+        private void ApplyApplicationReports(Guid deviceId, IList<Google.Apis.AndroidManagement.v1.Data.ApplicationReport>? reports)
+        {
+            if (reports == null) return;
+            var now = DateTime.UtcNow;
+
+            foreach (var r in reports)
+            {
+                if (string.IsNullOrEmpty(r.PackageName) || r.State != "INSTALLED") continue;
+
+                var existing = _db.DeviceInstalledApps.Local
+                    .FirstOrDefault(a => a.DeviceId == deviceId && a.PackageId == r.PackageName)
+                    ?? _db.DeviceInstalledApps.FirstOrDefault(a => a.DeviceId == deviceId && a.PackageId == r.PackageName);
+
+                if (existing != null)
+                {
+                    existing.AppName = r.DisplayName ?? existing.AppName;
+                    existing.VersionName = r.VersionName ?? existing.VersionName;
+                    existing.VersionCode = r.VersionCode.HasValue ? (int)r.VersionCode.Value : existing.VersionCode;
+                    existing.LastSeenOn = now;
+                }
+                else
+                {
+                    _db.DeviceInstalledApps.Add(new SDM.Domain.Entities.DeviceInstalledApp
+                    {
+                        Id = Guid.NewGuid(),
+                        DeviceId = deviceId,
+                        PackageId = r.PackageName,
+                        AppName = r.DisplayName,
+                        VersionName = r.VersionName,
+                        VersionCode = r.VersionCode.HasValue ? (int)r.VersionCode.Value : null,
+                        FirstSeenOn = now,
+                        LastSeenOn = now
+                    });
+                }
+            }
+        }
+
+        private async Task<Policy> GetOrBuildPolicyAsync(AndroidManagementService client, string policyName, ManagementMode mode)
+        {
+            try
+            {
+                return await client.Enterprises.Policies.Get(policyName).ExecuteAsync();
+            }
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return BuildPolicy(mode);
+            }
+        }
+
+        private async Task UpsertApplicationPolicyAsync(ManagementMode managementMode, string packageName, string installType)
+        {
+            var enterprise = await GetActiveEnterpriseOrThrowAsync();
+            var client = BuildClient();
+            var policyName = $"{enterprise.GoogleEnterpriseId}/policies/{PolicyIdFor(managementMode)}";
+
+            var policy = await GetOrBuildPolicyAsync(client, policyName, managementMode);
+            policy.Applications ??= new List<ApplicationPolicy>();
+
+            var existing = policy.Applications.FirstOrDefault(a => a.PackageName == packageName);
+            if (existing != null)
+                existing.InstallType = installType;
+            else
+                policy.Applications.Add(new ApplicationPolicy { PackageName = packageName, InstallType = installType });
+
+            await client.Enterprises.Policies.Patch(policy, policyName).ExecuteAsync();
+        }
+
+        public Task InstallAppOnPolicyAsync(ManagementMode managementMode, string packageName)
+            => UpsertApplicationPolicyAsync(managementMode, packageName, "FORCE_INSTALLED");
+
+        // Setting installType to BLOCKED actively removes the app from devices on this policy —
+        // Android Enterprise has no per-device install/uninstall primitive, only policy-driven
+        // desired state, so this is the correct way to force an uninstall.
+        public Task UninstallAppFromPolicyAsync(ManagementMode managementMode, string packageName)
+            => UpsertApplicationPolicyAsync(managementMode, packageName, "BLOCKED");
+
+        private static readonly Dictionary<string, string> NativeCommandTypeMap = new()
+        {
+            [SDM.Application.CommandTypes.LockDevice] = "LOCK",
+            [SDM.Application.CommandTypes.Reboot] = "REBOOT",
+            [SDM.Application.CommandTypes.WipeData] = "WIPE"
+        };
+
+        public async Task IssueDeviceCommandAsync(Guid deviceId, string commandType)
+        {
+            var device = await _db.Devices.FindAsync(deviceId);
+            if (device == null || string.IsNullOrEmpty(device.GoogleDeviceName))
+                throw new InvalidOperationException("Device is not an Android Enterprise device");
+
+            if (!NativeCommandTypeMap.TryGetValue(commandType, out var googleType))
+                throw new ArgumentException($"Command type '{commandType}' has no native Android Enterprise equivalent", nameof(commandType));
+
+            var client = BuildClient();
+            var command = new GoogleCommand { Type = googleType };
+            await client.Enterprises.Devices.IssueCommand(command, device.GoogleDeviceName).ExecuteAsync();
         }
 
         private static void ApplyGoogleDevice(LocalDevice device, GoogleDevice gd)

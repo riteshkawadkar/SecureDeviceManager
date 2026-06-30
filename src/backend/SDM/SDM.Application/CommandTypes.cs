@@ -13,7 +13,22 @@ namespace SDM.Application
         /// <summary>[Device Admin] Lock the screen immediately. Payload: (none)</summary>
         public const string LockScreen = "LockScreen";
 
-        /// <summary>[Device Owner] Factory-reset the device. Payload: (none). Agent has this disabled by default for safety.</summary>
+        /// <summary>
+        /// Lock the device. CustomAgent devices: [Device Admin] FCM push. Android Enterprise
+        /// devices: native devices.issueCommand(LOCK), no agent involved.
+        /// </summary>
+        public const string LockDevice = "LockDevice";
+
+        /// <summary>
+        /// Reboot the device. Android Enterprise devices only: native devices.issueCommand(REBOOT).
+        /// No CustomAgent equivalent exists today.
+        /// </summary>
+        public const string Reboot = "Reboot";
+
+        /// <summary>
+        /// Factory-reset the device. CustomAgent: [Device Owner] FCM push, disabled by default for
+        /// safety. Android Enterprise devices: native devices.issueCommand(WIPE).
+        /// </summary>
         public const string WipeData = "WipeData";
 
         // ── App visibility ─────────────────────────────────────────────────────

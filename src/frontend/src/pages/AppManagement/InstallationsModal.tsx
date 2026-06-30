@@ -14,6 +14,7 @@ const STATUS_STYLES: Record<InstallStatus, string> = {
   Installed: 'bg-green-100 text-green-700',
   Uninstalled: 'bg-gray-100 text-gray-600',
   Failed: 'bg-red-50 text-red-600',
+  Skipped: 'bg-amber-50 text-amber-700',
   Unknown: 'bg-gray-100 text-gray-500',
 };
 

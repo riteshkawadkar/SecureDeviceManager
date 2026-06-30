@@ -29,5 +29,22 @@ namespace SDM.Application.Interfaces
         // (matched by GoogleDeviceName). New AE devices get created with the ManagementMode
         // inferred from Google's own Device.ManagementMode field (DEVICE_OWNER/PROFILE_OWNER).
         Task<DeviceSyncResultDto> SyncDevicesAsync();
+
+        // Re-fetches a single device by its Google resource name (enterprises/X/devices/Y) and
+        // upserts it plus its ApplicationReports into DeviceInstalledApp. Called by the Pub/Sub
+        // webhook on ENROLLMENT/STATUS_REPORT/COMMAND notifications for near-real-time sync.
+        Task SyncSingleDeviceAsync(string googleDeviceName);
+
+        // Adds/updates an entry in the given management mode's shared default Policy so the app
+        // is force-installed on every device using that policy (desired-state, not per-device).
+        Task InstallAppOnPolicyAsync(SDM.Domain.ManagementMode managementMode, string packageName);
+
+        // Sets the app's entry in the policy to BLOCKED, which actively removes it from devices
+        // using that policy (Android Enterprise has no per-device app push/pull primitive).
+        Task UninstallAppFromPolicyAsync(SDM.Domain.ManagementMode managementMode, string packageName);
+
+        // Issues a native devices.issueCommand for LockDevice/Reboot/WipeData against an Android
+        // Enterprise device. Throws if the device isn't AE-managed or the type has no native mapping.
+        Task IssueDeviceCommandAsync(Guid deviceId, string commandType);
     }
 }

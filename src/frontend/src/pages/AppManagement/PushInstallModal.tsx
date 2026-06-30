@@ -4,8 +4,8 @@ import Modal from '../../components/ui/Modal';
 import { listDevices } from '../../api/devices';
 import { listDeviceGroups } from '../../api/deviceGroups';
 import { pushInstall, pushUninstall } from '../../api/appPackages';
-import type { AppPackage } from '../../types/appPackage';
-import type { Device, PagedResult } from '../../types/device';
+import { AppPackageSource, type AppPackage } from '../../types/appPackage';
+import { ManagementMode, type Device, type PagedResult } from '../../types/device';
 
 interface Props {
   app: AppPackage;
@@ -34,9 +34,16 @@ export default function PushInstallModal({ app, action, onClose }: Props) {
     queryFn: listDeviceGroups,
   });
 
-  const filteredDevices = devices.filter((d) =>
-    `${d.manufacturer} ${d.model} ${d.serialNumber}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const isCompatible = (d: Device) =>
+    app.source === AppPackageSource.PlayStore
+      ? d.managementMode !== ManagementMode.CustomAgent
+      : d.managementMode === ManagementMode.CustomAgent;
+
+  const filteredDevices = devices
+    .filter((d) => `${d.manufacturer} ${d.model} ${d.serialNumber}`.toLowerCase().includes(search.toLowerCase()))
+    .filter(isCompatible);
+
+  const incompatibleCount = devices.length - devices.filter(isCompatible).length;
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -129,7 +136,12 @@ export default function PushInstallModal({ app, action, onClose }: Props) {
                 </label>
               ))}
             </div>
-            <p className="text-xs text-gray-400 mt-1.5">{selectedDeviceIds.length} device(s) selected</p>
+            <p className="text-xs text-gray-400 mt-1.5">
+              {selectedDeviceIds.length} device(s) selected
+              {incompatibleCount > 0 && (
+                <> · {incompatibleCount} hidden ({app.source === AppPackageSource.PlayStore ? 'CustomAgent' : 'Android Enterprise'} devices can't run this app's source)</>
+              )}
+            </p>
           </div>
         ) : (
           <div>
@@ -144,6 +156,9 @@ export default function PushInstallModal({ app, action, onClose }: Props) {
                 <option key={g.id} value={g.id}>{g.name} ({g.deviceCount} devices)</option>
               ))}
             </select>
+            <p className="text-xs text-gray-400 mt-1.5">
+              Incompatible devices in the group (wrong source for their management mode) will show as "Skipped" after pushing.
+            </p>
           </div>
         )}
 

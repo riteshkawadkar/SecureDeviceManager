@@ -121,10 +121,16 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Hangfire dashboard (development only) - only when Hangfire is enabled
+// Hangfire dashboard (development only, no auth on it) - only when Hangfire is enabled
 if (app.Environment.IsDevelopment() && (hangfireEnabled))
 {
     app.UseHangfireDashboard("/hangfire");
+}
+
+// Recurring jobs must run in every environment, not just Development — command retries and
+// Android Enterprise sync are core product behavior, not a dev-only convenience.
+if (hangfireEnabled)
+{
     // schedule recurring job to process pending commands every minute
     RecurringJob.AddOrUpdate<SDM.Infrastructure.Services.HangfireJobs>(
         "process-pending-commands",

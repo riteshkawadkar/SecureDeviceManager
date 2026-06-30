@@ -165,6 +165,7 @@ namespace SDM.Infrastructure.Services
                     ComplianceStatus = d.ComplianceStatus,
                     AssignedUserName = d.AssignedUserName,
                     GroupId = d.GroupId,
+                    ManagementMode = d.ManagementMode,
                     CreatedOn = d.CreatedOn,
                     UpdatedOn = d.UpdatedOn
                 })

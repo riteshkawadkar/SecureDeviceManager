@@ -13,11 +13,13 @@ namespace SDM.Infrastructure.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly ICommandService _commandService;
+        private readonly IAndroidEnterpriseService _androidEnterpriseService;
 
-        public AppPackageService(ApplicationDbContext db, ICommandService commandService)
+        public AppPackageService(ApplicationDbContext db, ICommandService commandService, IAndroidEnterpriseService androidEnterpriseService)
         {
             _db = db;
             _commandService = commandService;
+            _androidEnterpriseService = androidEnterpriseService;
         }
 
         private async Task<AppPackageDto> ToDtoAsync(AppPackage a)
@@ -32,6 +34,7 @@ namespace SDM.Infrastructure.Services
                 Id = a.Id,
                 Name = a.Name,
                 PackageId = a.PackageId,
+                Source = a.Source,
                 Version = a.Version,
                 VersionCode = a.VersionCode,
                 IconUrl = a.IconUrl,
@@ -85,6 +88,7 @@ namespace SDM.Infrastructure.Services
                 Id = Guid.NewGuid(),
                 Name = request.Name,
                 PackageId = request.PackageId,
+                Source = request.Source,
                 Version = request.Version,
                 VersionCode = request.VersionCode,
                 IconUrl = request.IconUrl,
@@ -147,12 +151,16 @@ namespace SDM.Infrastructure.Services
             return ids.ToList();
         }
 
+        private const string IncompatiblePlayStoreReason = "Skipped: PlayStore-sourced apps can only be pushed to Android Enterprise devices";
+        private const string IncompatibleSideloadReason = "Skipped: Sideload apps can only be pushed to CustomAgent devices (no agent runs on Android Enterprise devices)";
+
         public async Task<List<AppInstallationDto>> PushInstallAsync(Guid appPackageId, PushInstallRequest request, Guid? actorUserId)
         {
             var app = await _db.AppPackages.FindAsync(appPackageId);
             if (app == null) throw new Exception("App package not found");
 
             var deviceIds = await ResolveTargetDeviceIdsAsync(request);
+            var devices = await _db.Devices.Where(d => deviceIds.Contains(d.Id)).ToListAsync();
             var batchId = Guid.NewGuid();
             var payload = System.Text.Json.JsonSerializer.Serialize(new
             {
@@ -163,19 +171,37 @@ namespace SDM.Infrastructure.Services
             });
 
             var installations = new List<AppInstallation>();
-            foreach (var deviceId in deviceIds)
+            var aeModesToPatch = new HashSet<ManagementMode>();
+
+            foreach (var device in devices)
             {
-                var cmd = await _commandService.CreateCommandAsync(deviceId, CommandTypes.InstallApp, payload, actorUserId, batchId);
-                installations.Add(new AppInstallation
+                var isAeDevice = device.ManagementMode != ManagementMode.CustomAgent;
+
+                if (isAeDevice && app.Source != AppPackageSource.PlayStore)
                 {
-                    Id = Guid.NewGuid(),
-                    AppPackageId = appPackageId,
-                    DeviceId = deviceId,
-                    Action = AppInstallAction.Install,
-                    CommandId = cmd.Id,
-                    CreatedOn = DateTime.UtcNow
-                });
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Install, null, IncompatiblePlayStoreReason));
+                    continue;
+                }
+                if (!isAeDevice && app.Source != AppPackageSource.SideloadUrl)
+                {
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Install, null, IncompatibleSideloadReason));
+                    continue;
+                }
+
+                if (isAeDevice)
+                {
+                    aeModesToPatch.Add(device.ManagementMode);
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Install, null, null));
+                }
+                else
+                {
+                    var cmd = await _commandService.CreateCommandAsync(device.Id, CommandTypes.InstallApp, payload, actorUserId, batchId);
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Install, cmd.Id, null));
+                }
             }
+
+            foreach (var mode in aeModesToPatch)
+                await _androidEnterpriseService.InstallAppOnPolicyAsync(mode, app.PackageId);
 
             _db.AppInstallations.AddRange(installations);
             await _db.SaveChangesAsync();
@@ -189,23 +215,42 @@ namespace SDM.Infrastructure.Services
             if (app == null) throw new Exception("App package not found");
 
             var deviceIds = await ResolveTargetDeviceIdsAsync(request);
+            var devices = await _db.Devices.Where(d => deviceIds.Contains(d.Id)).ToListAsync();
             var batchId = Guid.NewGuid();
             var payload = System.Text.Json.JsonSerializer.Serialize(new { packageName = app.PackageId });
 
             var installations = new List<AppInstallation>();
-            foreach (var deviceId in deviceIds)
+            var aeModesToPatch = new HashSet<ManagementMode>();
+
+            foreach (var device in devices)
             {
-                var cmd = await _commandService.CreateCommandAsync(deviceId, CommandTypes.UninstallApp, payload, actorUserId, batchId);
-                installations.Add(new AppInstallation
+                var isAeDevice = device.ManagementMode != ManagementMode.CustomAgent;
+
+                if (isAeDevice && app.Source != AppPackageSource.PlayStore)
                 {
-                    Id = Guid.NewGuid(),
-                    AppPackageId = appPackageId,
-                    DeviceId = deviceId,
-                    Action = AppInstallAction.Uninstall,
-                    CommandId = cmd.Id,
-                    CreatedOn = DateTime.UtcNow
-                });
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Uninstall, null, IncompatiblePlayStoreReason));
+                    continue;
+                }
+                if (!isAeDevice && app.Source != AppPackageSource.SideloadUrl)
+                {
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Uninstall, null, IncompatibleSideloadReason));
+                    continue;
+                }
+
+                if (isAeDevice)
+                {
+                    aeModesToPatch.Add(device.ManagementMode);
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Uninstall, null, null));
+                }
+                else
+                {
+                    var cmd = await _commandService.CreateCommandAsync(device.Id, CommandTypes.UninstallApp, payload, actorUserId, batchId);
+                    installations.Add(NewInstallation(appPackageId, device.Id, AppInstallAction.Uninstall, cmd.Id, null));
+                }
             }
+
+            foreach (var mode in aeModesToPatch)
+                await _androidEnterpriseService.UninstallAppFromPolicyAsync(mode, app.PackageId);
 
             _db.AppInstallations.AddRange(installations);
             await _db.SaveChangesAsync();
@@ -213,8 +258,21 @@ namespace SDM.Infrastructure.Services
             return await GetInstallationsAsync(appPackageId);
         }
 
+        private static AppInstallation NewInstallation(Guid appPackageId, Guid deviceId, AppInstallAction action, Guid? commandId, string? failureReason) => new()
+        {
+            Id = Guid.NewGuid(),
+            AppPackageId = appPackageId,
+            DeviceId = deviceId,
+            Action = action,
+            CommandId = commandId,
+            FailureReason = failureReason,
+            CreatedOn = DateTime.UtcNow
+        };
+
         public async Task<List<AppInstallationDto>> GetInstallationsAsync(Guid appPackageId)
         {
+            var app = await _db.AppPackages.AsNoTracking().FirstOrDefaultAsync(a => a.Id == appPackageId);
+
             var rows = await _db.AppInstallations
                 .AsNoTracking()
                 .Where(i => i.AppPackageId == appPackageId)
@@ -222,6 +280,18 @@ namespace SDM.Infrastructure.Services
                 .Include(i => i.Command)
                 .OrderByDescending(i => i.CreatedOn)
                 .ToListAsync();
+
+            // AE-managed rows (CommandId == null, no FailureReason) have no DeviceCommand to read
+            // status from — Policy.applications[] is desired-state, so "installed" is determined
+            // by whether the device has actually reported the package via DeviceInstalledApp
+            // (populated by SyncSingleDeviceAsync from Pub/Sub STATUS_REPORT notifications).
+            var aeDeviceIds = rows.Where(i => i.CommandId == null && i.FailureReason == null).Select(i => i.DeviceId).Distinct().ToList();
+            var installedOnDevices = aeDeviceIds.Count == 0 || app == null
+                ? new HashSet<Guid>()
+                : (await _db.DeviceInstalledApps.AsNoTracking()
+                    .Where(d => aeDeviceIds.Contains(d.DeviceId) && d.PackageId == app.PackageId)
+                    .Select(d => d.DeviceId)
+                    .ToListAsync()).ToHashSet();
 
             return rows.Select(i => new AppInstallationDto
             {
@@ -231,18 +301,31 @@ namespace SDM.Infrastructure.Services
                 DeviceName = i.Device != null ? $"{i.Device.Manufacturer} {i.Device.Model}".Trim() : string.Empty,
                 Action = i.Action.ToString(),
                 CommandId = i.CommandId,
-                Status = MapStatus(i.Command?.Status, i.Action),
+                Status = MapStatus(i, installedOnDevices.Contains(i.DeviceId)),
                 CreatedOn = i.CreatedOn
             }).ToList();
         }
 
-        private static string MapStatus(CommandStatus? status, AppInstallAction action) => status switch
+        private static string MapStatus(AppInstallation i, bool reportedInstalled)
         {
-            CommandStatus.Pending => "Pending",
-            CommandStatus.Sent => "Sent",
-            CommandStatus.Executed => action == AppInstallAction.Uninstall ? "Uninstalled" : "Installed",
-            CommandStatus.Failed => "Failed",
-            _ => "Unknown"
-        };
+            if (i.FailureReason != null) return "Skipped";
+
+            if (i.CommandId == null)
+            {
+                // Android Enterprise row, status driven by DeviceInstalledApp reports.
+                return i.Action == AppInstallAction.Uninstall
+                    ? (reportedInstalled ? "Pending" : "Uninstalled")
+                    : (reportedInstalled ? "Installed" : "Pending");
+            }
+
+            return i.Command?.Status switch
+            {
+                CommandStatus.Pending => "Pending",
+                CommandStatus.Sent => "Sent",
+                CommandStatus.Executed => i.Action == AppInstallAction.Uninstall ? "Uninstalled" : "Installed",
+                CommandStatus.Failed => "Failed",
+                _ => "Unknown"
+            };
+        }
     }
 }

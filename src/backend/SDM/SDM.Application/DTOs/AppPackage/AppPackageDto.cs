@@ -5,6 +5,7 @@ namespace SDM.Application.DTOs.AppPackage
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string PackageId { get; set; } = string.Empty;
+        public SDM.Domain.AppPackageSource Source { get; set; }
         public string Version { get; set; } = string.Empty;
         public int? VersionCode { get; set; }
         public string? IconUrl { get; set; }
@@ -26,6 +27,7 @@ namespace SDM.Application.DTOs.AppPackage
     {
         public string Name { get; set; } = string.Empty;
         public string PackageId { get; set; } = string.Empty;
+        public SDM.Domain.AppPackageSource Source { get; set; } = SDM.Domain.AppPackageSource.SideloadUrl;
         public string Version { get; set; } = string.Empty;
         public int? VersionCode { get; set; }
         public string? IconUrl { get; set; }

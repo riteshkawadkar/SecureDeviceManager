@@ -1,7 +1,13 @@
+export enum AppPackageSource {
+  SideloadUrl = 0,
+  PlayStore = 1,
+}
+
 export interface AppPackage {
   id: string;
   name: string;
   packageId: string;
+  source: AppPackageSource;
   version: string;
   versionCode: number | null;
   iconUrl: string | null;
@@ -20,6 +26,7 @@ export interface AppPackage {
 export interface CreateAppPackageRequest {
   name: string;
   packageId: string;
+  source: AppPackageSource;
   version: string;
   versionCode?: number | null;
   iconUrl?: string | null;
@@ -37,7 +44,7 @@ export interface PushInstallRequest {
   groupId?: string;
 }
 
-export type InstallStatus = 'Pending' | 'Sent' | 'Installed' | 'Uninstalled' | 'Failed' | 'Unknown';
+export type InstallStatus = 'Pending' | 'Sent' | 'Installed' | 'Uninstalled' | 'Failed' | 'Skipped' | 'Unknown';
 
 export interface AppInstallation {
   id: string;
