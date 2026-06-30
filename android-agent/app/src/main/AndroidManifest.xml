@@ -4,6 +4,8 @@
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 	<uses-permission android:name="android.permission.CAMERA" />
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
 	<application
 		android:allowBackup="true"
@@ -13,6 +15,12 @@
 		<activity
 			android:name=".PoliciesActivity"
 			android:exported="false"/>
+
+		<activity
+			android:name=".KioskHomeActivity"
+			android:exported="false"
+			android:launchMode="singleTask"
+			android:excludeFromRecents="true" />
 
 		<activity
 			android:name=".MainActivity"
@@ -52,6 +60,18 @@
 		<receiver
 			android:name=".InstallReceiver"
 			android:exported="true" />
+
+		<receiver
+			android:name=".BootReceiver"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="android.intent.action.BOOT_COMPLETED" />
+			</intent-filter>
+		</receiver>
+
+		<service
+			android:name=".KioskOverlayService"
+			android:exported="false" />
 	</application>
 
 </manifest>

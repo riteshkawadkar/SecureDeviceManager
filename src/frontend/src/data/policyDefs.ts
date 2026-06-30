@@ -209,10 +209,15 @@ export const POLICY_DEFS: PolicyDef[] = [
     category: 'Apps & System',
     icon: Smartphone,
     label: 'Kiosk Mode',
-    description: 'Lock the device to a single application (task-lock / screen-pinning)',
+    description: 'Lock the device to one app (single-app) or a curated set of apps (multi-app) via task-lock / screen-pinning',
     requiresOwner: true,
     binaryAction: { trueLabel: 'Enable', falseLabel: 'Disable', trueCmd: 'EnableKiosk', falseCmd: 'DisableKiosk' },
-    params: [{ key: 'packageName', label: 'App Package Name', type: 'text', placeholder: 'com.example.app' }],
+    params: [{
+      key: 'packageName',
+      label: 'App Package Name(s)',
+      type: 'text',
+      placeholder: 'com.android.chrome — comma-separate for multi-app, e.g. com.android.chrome, com.google.android.youtube',
+    }],
     showParamsWhen: true,
   },
   {

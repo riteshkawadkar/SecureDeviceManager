@@ -195,20 +195,25 @@ class FCMService : FirebaseMessagingService() {
                 }
 
                 // ── Kiosk / task lock ────────────────────────────────────────
+                // packageName accepts a single package ("com.android.chrome") for
+                // single-app kiosk, or a comma-separated list for multi-app kiosk
+                // (KioskManager picks the picker UI automatically based on the count).
                 "LockApp", "lock-app", "EnableKiosk" -> {
-                    val pkg = data["packageName"]
-                    if (pkg != null && isDeviceOwner) {
-                        dpm.setLockTaskPackages(adminComponent, arrayOf(pkg))
-                        Log.d(TAG, "Kiosk mode enabled for: $pkg")
+                    val pkgRaw = data["packageName"]
+                    val pkgs = pkgRaw?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()
+                        ?: emptyList()
+                    if (pkgs.isNotEmpty() && isDeviceOwner) {
+                        KioskManager.start(this, dpm, adminComponent, pkgs)
+                        Log.d(TAG, "Kiosk mode enabled for: $pkgs")
                         success = true
                     } else {
-                        Log.w(TAG, "EnableKiosk requires Device Owner. pkg=$pkg")
+                        Log.w(TAG, "EnableKiosk requires Device Owner and at least one package. pkg=$pkgRaw")
                     }
                 }
 
                 "DisableKiosk" -> {
                     if (isDeviceOwner) {
-                        dpm.setLockTaskPackages(adminComponent, emptyArray())
+                        KioskManager.stop(this, dpm, adminComponent)
                         Log.d(TAG, "Kiosk mode disabled")
                         success = true
                     } else {
