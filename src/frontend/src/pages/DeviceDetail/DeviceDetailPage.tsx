@@ -10,6 +10,7 @@ import { getDevice, listViolations, listCommands, sendCommand } from '../../api/
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
+import Pagination from '../../components/ui/Pagination';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection, getIncompatiblePolicies } from '../../data/policyDefs';
 import type { DeviceCommand } from '../../types/device';
@@ -31,6 +32,8 @@ const DEVICE_COMMANDS = [
   { type: 'SendAlert', label: 'Send Alert', desc: 'Push a message to the device screen', icon: Bell },
   { type: 'WipeData', label: 'Remote Wipe', desc: 'Full factory reset — irreversible', icon: Trash2 },
 ];
+
+const HISTORY_PAGE_SIZE = 8;
 
 const COMMAND_FAILED = 3;
 
@@ -118,7 +121,9 @@ function buildActivityHistory(commands: DeviceCommand[] | undefined): ActivityEv
   }
   const events: ActivityEvent[] = [];
   for (const [key, cmds] of groups) {
-    const sorted = [...cmds].sort((a, b) => new Date(a.createdOn).getTime() - new Date(b.createdOn).getTime());
+    // Newest first, both for the items shown when a group is expanded and for "when" below —
+    // a multi-policy batch is timestamped by its most recent command, not its first.
+    const sorted = [...cmds].sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime());
     events.push({
       key,
       items: sorted.map(describeCommand),
@@ -139,6 +144,7 @@ export default function DeviceDetailPage() {
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [historyPage, setHistoryPage] = useState(1);
 
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
@@ -171,6 +177,15 @@ export default function DeviceDetailPage() {
   const appliedPolicies = useMemo(() => policyLatestState.filter(isCurrentlyApplied), [policyLatestState]);
   const alertHistory = useMemo(() => buildAlertHistory(commands), [commands]);
   const activityHistory = useMemo(() => buildActivityHistory(commands), [commands]);
+  const historyTotalPages = Math.max(1, Math.ceil(activityHistory.length / HISTORY_PAGE_SIZE));
+  const pagedHistory = useMemo(
+    () => activityHistory.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE),
+    [activityHistory, historyPage],
+  );
+
+  useEffect(() => {
+    if (historyPage > historyTotalPages) setHistoryPage(1);
+  }, [historyPage, historyTotalPages]);
 
   function toggleEvent(key: string) {
     setExpandedEvents((prev) => {
@@ -564,7 +579,7 @@ export default function DeviceDetailPage() {
           <p className="text-xs text-gray-400 text-center py-6">No commands have been sent to this device yet</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {activityHistory.map((evt) => {
+            {pagedHistory.map((evt) => {
               const total = evt.items.length;
               const successCount = evt.items.filter((it) => it.cmd.status !== COMMAND_FAILED).length;
               const aggCls = successCount === total
@@ -602,7 +617,7 @@ export default function DeviceDetailPage() {
                           )}
                         </div>
                         <p className="text-xs text-gray-400" title={formatDate(evt.when)}>
-                          {formatRelativeTime(evt.when)}{evt.by ? ` · by ${evt.by}` : ''}
+                          {formatRelativeTime(evt.when)} · by {evt.by ?? 'System'}
                         </p>
                       </div>
                     </div>
@@ -627,9 +642,14 @@ export default function DeviceDetailPage() {
                                 </span>
                               )}
                             </div>
-                            <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium shrink-0 ${statusBadge.cls}`}>
-                              {statusBadge.label}
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[11px] text-gray-400" title={formatDate(it.cmd.createdOn)}>
+                                {formatRelativeTime(it.cmd.createdOn)}
+                              </span>
+                              <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${statusBadge.cls}`}>
+                                {statusBadge.label}
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
@@ -638,6 +658,11 @@ export default function DeviceDetailPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+        {historyTotalPages > 1 && (
+          <div className="flex justify-center px-5 py-3 border-t border-gray-100">
+            <Pagination page={historyPage} pageSize={HISTORY_PAGE_SIZE} total={activityHistory.length} onChange={setHistoryPage} />
           </div>
         )}
       </div>
