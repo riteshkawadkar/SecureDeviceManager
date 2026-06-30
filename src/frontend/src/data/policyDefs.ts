@@ -43,7 +43,17 @@ export type PolicyDef = {
   params?: PolicyParam[];
   /** When set, params are only shown when action === this value. */
   showParamsWhen?: boolean;
+  /**
+   * Set only when part of this policy's behavior needs an Android version higher than the
+   * platform floor (Android 7.0 / API 24, which every policy already requires since that's
+   * the agent's own minSdk). Below minApi the command still runs and reports success — it
+   * just falls back to a narrower effect, per the agent's own Build.VERSION.SDK_INT checks.
+   */
+  versionCaveat?: { minApi: number; minLabel: string; note: string };
 };
+
+/** Every policy in this catalogue requires at least this — the agent's own minSdk floor. */
+export const BASELINE_ANDROID_VERSION = 'Android 7.0+ (API 24)';
 
 export const POLICY_DEFS: PolicyDef[] = [
   // ── Security ────────────────────────────────────────────────────────────────
@@ -94,6 +104,11 @@ export const POLICY_DEFS: PolicyDef[] = [
     description: 'Turn the Wi-Fi adapter on or off entirely',
     requiresOwner: true,
     binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableWifi', falseCmd: 'EnableWifi' },
+    versionCaveat: {
+      minApi: 31,
+      minLabel: 'Android 12 (API 31)',
+      note: 'Below Android 12 this only blocks Wi-Fi configuration changes — the quick-settings toggle itself stays usable.',
+    },
   },
   {
     id: 'wifiConfig',
@@ -113,6 +128,11 @@ export const POLICY_DEFS: PolicyDef[] = [
     description: 'Turn the Bluetooth adapter on or off entirely',
     requiresOwner: true,
     binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableBluetooth', falseCmd: 'EnableBluetooth' },
+    versionCaveat: {
+      minApi: 26,
+      minLabel: 'Android 8.0 (API 26)',
+      note: 'Below Android 8.0 this only blocks Bluetooth settings access — the radio itself can still be toggled.',
+    },
   },
   {
     id: 'bluetoothConfig',
@@ -206,7 +226,7 @@ export const POLICY_DEFS: PolicyDef[] = [
   },
   {
     id: 'kiosk',
-    category: 'Apps & System',
+    category: 'Kiosk',
     icon: Smartphone,
     label: 'Kiosk Mode',
     description: 'Lock the device to one app (single-app) or a curated set of apps (multi-app) via task-lock / screen-pinning',
@@ -219,6 +239,11 @@ export const POLICY_DEFS: PolicyDef[] = [
       placeholder: 'com.android.chrome — comma-separate for multi-app, e.g. com.android.chrome, com.google.android.youtube',
     }],
     showParamsWhen: true,
+    versionCaveat: {
+      minApi: 28,
+      minLabel: 'Android 9.0 (API 28)',
+      note: 'Below Android 9.0, multi-app kiosk still locks all selected apps, but the built-in Recents switcher to move between them is unavailable — single-app kiosk is unaffected.',
+    },
   },
   {
     id: 'webRestrictions',
@@ -279,4 +304,33 @@ export function isRestrictiveDirection(def: PolicyDef, commandType: string, payl
     return commandType === def.binaryAction.trueCmd;
   }
   return true;
+}
+
+// ─── Android version compatibility ─────────────────────────────────────────────
+// The agent reports Build.VERSION.RELEASE (e.g. "9", "13", "7.1") at enrollment, stored as
+// Device.androidVersion. This maps that release string to an API level so we can flag, per
+// device, which policies' enhanced behavior (versionCaveat) isn't available on that device —
+// computed live from the already-stored field rather than a separate persisted flag, so it
+// never goes stale if a device's OS changes.
+const RELEASE_TO_API: Record<string, number> = {
+  '7.0': 24, '7.1': 25, '7.1.1': 25, '7.1.2': 25,
+  '8.0': 26, '8.0.0': 26, '8.1': 27, '8.1.0': 27,
+  '9': 28, '10': 29, '11': 30, '12': 31, '12L': 32,
+  '13': 33, '14': 34, '15': 35, '16': 36,
+};
+
+/** Best-effort Build.VERSION.RELEASE → API level mapping. Returns null if unrecognized. */
+export function getApiLevel(androidRelease: string | null | undefined): number | null {
+  if (!androidRelease) return null;
+  const trimmed = androidRelease.trim();
+  if (RELEASE_TO_API[trimmed] !== undefined) return RELEASE_TO_API[trimmed];
+  const major = trimmed.match(/^(\d+)/)?.[1];
+  return major !== undefined ? RELEASE_TO_API[major] ?? null : null;
+}
+
+/** Policies whose versionCaveat this device's Android release doesn't meet. Empty if unknown/compatible. */
+export function getIncompatiblePolicies(androidRelease: string | null | undefined): PolicyDef[] {
+  const apiLevel = getApiLevel(androidRelease);
+  if (apiLevel === null) return [];
+  return POLICY_DEFS.filter((d) => d.versionCaveat && apiLevel < d.versionCaveat.minApi);
 }

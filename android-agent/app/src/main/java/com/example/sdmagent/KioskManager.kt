@@ -7,14 +7,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
+
+/** Screen-off timeout while kiosk mode is active, milliseconds. */
+private const val KIOSK_SCREEN_TIMEOUT_MS = "1800000" // 30 min
+/** Screen-off timeout restored when kiosk mode is disabled, milliseconds. */
+private const val DEFAULT_SCREEN_TIMEOUT_MS = "60000" // 1 min
 
 /**
  * Single-app kiosk: one package is launched directly with lock task forced on.
  * Multi-app kiosk (more than one package): KioskHomeActivity is launched instead,
- * showing a picker grid of the allowed packages, and KioskOverlayService adds a
- * floating "Apps" button so the user can return to the picker (Home/Recents stay
- * disabled by lock task either way).
+ * showing a picker grid of the allowed packages. LOCK_TASK_FEATURE_OVERVIEW is enabled
+ * so Recents works within lock task — scoped only to the allowlisted tasks — letting
+ * the user switch back to the picker without a floating button or any extra permission
+ * (Device Owner apps cannot self-grant SYSTEM_ALERT_WINDOW; there is no public API for it).
  */
 object KioskManager {
     private const val TAG = "KioskManager"
@@ -40,7 +47,15 @@ object KioskManager {
     fun stop(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
         prefs(context).edit().putBoolean(KEY_ENABLED, false).remove(KEY_PACKAGES).apply()
         dpm.setLockTaskPackages(admin, emptyArray())
-        KioskOverlayService.stop(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
+        }
+        dpm.setKeyguardDisabled(admin, false)
+        try {
+            dpm.setSystemSetting(admin, Settings.System.SCREEN_OFF_TIMEOUT, DEFAULT_SCREEN_TIMEOUT_MS)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Could not restore screen timeout", e)
+        }
     }
 
     /** Called from BootReceiver — lock task state itself does not survive a reboot. */
@@ -54,14 +69,48 @@ object KioskManager {
     private fun applyAllowlistAndLaunch(
         context: Context, dpm: DevicePolicyManager, admin: ComponentName, packages: List<String>
     ) {
-        // Own package must be allowlisted too — needed for KioskHomeActivity and the
-        // overlay's "Apps" button to remain inside lock task in multi-app mode.
+        // Lift any enforced password policy so setKeyguardDisabled() below has a chance of
+        // working — Android only allows disabling the keyguard when there is no secure lock
+        // screen. Note this only stops a future credential from being *required*; if the user
+        // already has a PIN/pattern set from an earlier SetPasswordPolicy command, this does
+        // NOT remove it (no public Device Owner API can silently clear an existing credential
+        // on modern Android) — that credential must be removed manually via device Settings.
+        @Suppress("DEPRECATION")
+        dpm.setPasswordQuality(admin, DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED)
+        @Suppress("DEPRECATION")
+        dpm.setPasswordMinimumLength(admin, 0)
+
+        // Own package must be allowlisted too — needed for KioskHomeActivity to remain
+        // inside lock task in multi-app mode.
         val allowList = (packages + context.packageName).distinct()
         dpm.setLockTaskPackages(admin, allowList.toTypedArray())
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // The platform rejects OVERVIEW without HOME (IllegalArgumentException). Enabling
+            // HOME here is still safe: the real launcher isn't in the lock task allowlist, so
+            // pressing Home is a no-op rather than an escape route — it only activates Overview.
+            val features = if (packages.size > 1) {
+                DevicePolicyManager.LOCK_TASK_FEATURE_HOME or DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW
+            } else {
+                DevicePolicyManager.LOCK_TASK_FEATURE_NONE
+            }
+            dpm.setLockTaskFeatures(admin, features)
+        }
+
+        // Enter lock task before touching keyguard/screen settings — issuing those DPM
+        // calls before the lock-task-enabled launch was observed to prevent lock task
+        // from actually engaging (likely a keyguard state transition race).
         launchForeground(context, packages)
 
-        if (packages.size > 1) KioskOverlayService.start(context) else KioskOverlayService.stop(context)
+        // Without this, a screen-off/screen-on cycle can drop lock task back to the real
+        // launcher instead of resuming the locked app (observed: Keyguard un-occluding
+        // triggers a system-initiated HOME start that lock task does not survive).
+        dpm.setKeyguardDisabled(admin, true)
+        try {
+            dpm.setSystemSetting(admin, Settings.System.SCREEN_OFF_TIMEOUT, KIOSK_SCREEN_TIMEOUT_MS)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Could not extend screen timeout", e)
+        }
     }
 
     private fun launchForeground(context: Context, packages: List<String>) {

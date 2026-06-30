@@ -5,7 +5,16 @@
 	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 	<uses-permission android:name="android.permission.CAMERA" />
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+	<!-- Android 11+ package visibility: required for getLaunchIntentForPackage() to
+	     resolve other apps' launcher intents (e.g. Chrome) for kiosk mode. Without this,
+	     PackageManager hides other installed apps from this app's queries entirely. -->
+	<queries>
+		<intent>
+			<action android:name="android.intent.action.MAIN" />
+			<category android:name="android.intent.category.LAUNCHER" />
+		</intent>
+	</queries>
 
 	<application
 		android:allowBackup="true"
@@ -68,10 +77,6 @@
 				<action android:name="android.intent.action.BOOT_COMPLETED" />
 			</intent-filter>
 		</receiver>
-
-		<service
-			android:name=".KioskOverlayService"
-			android:exported="false" />
 	</application>
 
 </manifest>

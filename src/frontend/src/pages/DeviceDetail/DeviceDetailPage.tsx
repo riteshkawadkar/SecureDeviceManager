@@ -5,7 +5,7 @@ import { Lock, Trash2, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck } from 
 import { getDevice, listViolations, listCommands, sendCommand } from '../../api/devices';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
-import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection } from '../../data/policyDefs';
+import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection, getIncompatiblePolicies } from '../../data/policyDefs';
 import type { DeviceCommand } from '../../types/device';
 
 const COMMAND_STATUS_BADGE: Record<number, { label: string; cls: string }> = {
@@ -62,6 +62,15 @@ export default function DeviceDetailPage() {
   });
 
   const appliedPolicies = useMemo(() => buildAppliedPolicies(commands), [commands]);
+
+  // Of the policies actually applied to this device, which ones won't get their full effect
+  // on its reported Android version (e.g. Wi-Fi Toggle on Android 9 only blocks config
+  // changes, not the quick-settings toggle, since that needs Android 12+) — flagged here
+  // rather than stored at enrollment so it never goes stale if the device's OS changes.
+  const incompatibleApplied = useMemo(() => {
+    const incompatibleIds = new Set(getIncompatiblePolicies(device?.androidVersion).map((d) => d.id));
+    return appliedPolicies.filter(({ def }) => incompatibleIds.has(def.id));
+  }, [appliedPolicies, device?.androidVersion]);
 
   const cmdMutation = useMutation({
     mutationFn: ({ type }: { type: string }) => sendCommand(id!, type),
@@ -177,6 +186,15 @@ export default function DeviceDetailPage() {
                 </span>
               )}
             </div>
+            {incompatibleApplied.length > 0 && (
+              <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-100">
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  <AlertTriangle size={11} className="inline mr-1 -mt-0.5" />
+                  {incompatibleApplied.length} applied polic{incompatibleApplied.length > 1 ? 'ies' : 'y'} won&rsquo;t
+                  get full effect on Android {device.androidVersion}: {incompatibleApplied.map(({ def }) => def.label).join(', ')}
+                </p>
+              </div>
+            )}
             <div className="divide-y divide-gray-50">
               {appliedPolicies.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-4">No policies have been deployed to this device yet</p>

@@ -3,14 +3,15 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Shield, Smartphone, Wifi, Package,
   ChevronRight, ChevronLeft, CheckCircle2, Search,
-  ChevronDown, Layers, AlertTriangle, Loader2, Lock,
+  ChevronDown, Layers, AlertTriangle, Loader2, Lock, Sparkles, Info,
 } from 'lucide-react';
 import { listDevices, sendBulkCommand } from '../../api/devices';
 import type { BulkCommandResult } from '../../api/devices';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import type { Device, PagedResult } from '../../types/device';
 import { ComplianceStatus } from '../../types/device';
-import { POLICY_DEFS } from '../../data/policyDefs';
+import { POLICY_DEFS, BASELINE_ANDROID_VERSION, getIncompatiblePolicies } from '../../data/policyDefs';
+import type { PolicyDef } from '../../data/policyDefs';
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,136 @@ function buildCommands(state: PolicyState): CommandEntry[] {
   return cmds;
 }
 
+// ─── Kiosk Mode — dedicated card ───────────────────────────────────────────────
+// Kiosk is the only command that takes over the whole device (Home/Recents disabled,
+// keyguard forced off) and the only one with a hard conflict against another policy
+// (Password Policy). It gets its own explained card instead of being buried in a list.
+
+function KioskCard({
+  def, state, onUpdateItem, onUpdateParam, conflict,
+}: {
+  def: PolicyDef;
+  state: PolicyItemState;
+  onUpdateItem: (patch: Partial<PolicyItemState>) => void;
+  onUpdateParam: (key: string, value: string | number) => void;
+  conflict: boolean;
+}) {
+  const Icon = def.icon;
+  return (
+    <div className="bg-gradient-to-br from-indigo-50/70 to-white rounded-xl border-2 border-indigo-200 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50/60 flex items-start gap-3">
+        <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+          <Icon size={16} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-indigo-900">{def.label}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-semibold bg-indigo-600 text-white">
+              <Sparkles size={9} /> Special Command
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 text-purple-600">Device Owner</span>
+          </div>
+          <p className="text-xs text-indigo-700/80 mt-1 leading-relaxed">{def.description}</p>
+        </div>
+        <input
+          type="checkbox"
+          checked={state.enabled}
+          onChange={(e) => onUpdateItem({ enabled: e.target.checked })}
+          className="w-4 h-4 accent-indigo-600 shrink-0 mt-1 cursor-pointer"
+        />
+      </div>
+
+      {/* Explanation */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 px-5 py-4 text-xs text-gray-600 border-b border-indigo-100">
+        <div>
+          <p className="font-semibold text-gray-800 mb-1">What it does</p>
+          <p className="leading-relaxed">
+            Locks the device to a single app or a curated set of apps using Android&rsquo;s Lock Task Mode.
+            Home and Recents are disabled — Recents becomes a scoped app switcher only in multi-app mode.
+            The device cannot be used for anything outside the selected app(s) until kiosk is explicitly disabled.
+          </p>
+        </div>
+        <div>
+          <p className="font-semibold text-gray-800 mb-1">What it can achieve</p>
+          <ul className="list-disc list-inside space-y-0.5 leading-relaxed">
+            <li>True single-purpose lockdown — e.g. a tablet that only runs Chrome</li>
+            <li>Curated multi-app kiosk with a built-in app picker/switcher</li>
+            <li>Auto re-locks itself after a reboot — no admin action needed</li>
+            <li>Instant remote unlock by sending the Disable direction</li>
+          </ul>
+        </div>
+        <div>
+          <p className="font-semibold text-gray-800 mb-1">Prerequisites</p>
+          <ul className="list-disc list-inside space-y-0.5 leading-relaxed">
+            <li>Device must be enrolled as <strong>Device Owner</strong> — Device Admin alone is not enough, the command silently no-ops</li>
+            <li>Target app package(s) must already be installed on the device</li>
+            <li>Device must have <strong>no PIN/pattern/password</strong> set — kiosk disables the keyguard so it survives screen timeout, which Android only permits without a secure lock screen</li>
+            <li>{BASELINE_ANDROID_VERSION}</li>
+          </ul>
+        </div>
+        <div>
+          <p className="font-semibold text-gray-800 mb-1">What to expect</p>
+          <ul className="list-disc list-inside space-y-0.5 leading-relaxed">
+            <li>One package = direct single-app lock; 2+ comma-separated packages = built-in picker grid</li>
+            <li>Screen timeout is auto-extended to 30 min while active, restored to 1 min on disable</li>
+            <li>Emergency calling generally remains reachable per OS convention (not guaranteed on every OEM skin)</li>
+            <li>Cannot be combined with Password Policy in the same deployment — see warning below</li>
+            {def.versionCaveat && <li>{def.versionCaveat.note}</li>}
+          </ul>
+        </div>
+      </div>
+
+      {/* Conflict warning, scoped to this card too for visibility */}
+      {conflict && state.enabled && (
+        <div className="flex items-start gap-2 px-5 py-3 bg-amber-50 border-b border-amber-100">
+          <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700 leading-relaxed">
+            Password Policy is also selected below — disable one of the two before continuing.
+          </p>
+        </div>
+      )}
+
+      {/* Controls */}
+      {state.enabled && (
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex bg-white border border-indigo-200 rounded-lg p-0.5 w-fit">
+            <button
+              onClick={() => onUpdateItem({ action: true })}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                state.action ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Enable
+            </button>
+            <button
+              onClick={() => onUpdateItem({ action: false })}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                !state.action ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Disable
+            </button>
+          </div>
+
+          {state.action && def.params?.map((p) => (
+            <div key={p.key}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{p.label}</label>
+              <input
+                type="text"
+                value={String(state.params[p.key] ?? '')}
+                onChange={(e) => onUpdateParam(p.key, e.target.value)}
+                placeholder={p.placeholder}
+                className="w-full px-3 py-1.5 text-xs border border-indigo-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function BulkPolicyPage() {
@@ -229,6 +360,21 @@ export default function BulkPolicyPage() {
 
   const enabledCommands = buildCommands(policyState);
 
+  // Kiosk mode disables the keyguard so lock task survives screen-off (Android only allows
+  // that when there's no secure lock screen). A password policy applied alongside it would
+  // force a PIN/pattern back on, silently breaking kiosk persistence on real devices.
+  const kioskPasswordConflict = !!(
+    policyState.kiosk?.enabled && policyState.kiosk.action &&
+    policyState.password?.enabled && policyState.password.action
+  );
+
+  // Per-device flag: of the currently-enabled policies, which ones won't get their full
+  // effect on this device's reported Android version (e.g. Wi-Fi Toggle on Android 9 only
+  // blocks config changes, not the quick-settings toggle, since that needs Android 12+).
+  function getDeviceVersionWarnings(device: Device): PolicyDef[] {
+    return getIncompatiblePolicies(device.androidVersion).filter((d) => policyState[d.id]?.enabled);
+  }
+
   const mutation = useMutation({
     mutationFn: async () => {
       const deviceIds = Array.from(selected);
@@ -247,7 +393,8 @@ export default function BulkPolicyPage() {
   // ── Step indicator ────────────────────────────────────────────────────────
 
   const STEPS = ['Configure Policy', 'Select Targets', 'Review & Deploy'];
-  const categories = [...new Set(POLICY_DEFS.map((d) => d.category))];
+  const kioskDef = POLICY_DEFS.find((d) => d.id === 'kiosk')!;
+  const categories = [...new Set(POLICY_DEFS.filter((d) => d.id !== 'kiosk').map((d) => d.category))];
 
   return (
     <div className="space-y-5 pb-10">
@@ -257,6 +404,17 @@ export default function BulkPolicyPage() {
         <h1 className="text-xl font-semibold text-gray-900">Bulk Policy Deployment</h1>
         <p className="text-sm text-gray-500">Configure a policy bundle and push it to multiple devices at once</p>
       </div>
+
+      {/* Platform-wide Android floor — every policy in this catalogue requires at least this */}
+      {step === 1 && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
+          <Info size={14} className="text-blue-500 shrink-0" />
+          <p className="text-xs text-blue-700">
+            All policies require <strong>{BASELINE_ANDROID_VERSION}</strong>. A few have additional version
+            requirements for their full effect — those are noted under the policy when applicable.
+          </p>
+        </div>
+      )}
 
       {/* Step indicator — full on tablet/desktop, compact progress on mobile */}
       {step < 4 && (
@@ -345,6 +503,15 @@ export default function BulkPolicyPage() {
             </div>
           </div>
 
+          {/* Kiosk Mode — special dedicated card, not bundled with the regular categories */}
+          <KioskCard
+            def={kioskDef}
+            state={policyState.kiosk}
+            onUpdateItem={(patch) => updateItem('kiosk', patch)}
+            onUpdateParam={(key, value) => updateParam('kiosk', key, value)}
+            conflict={kioskPasswordConflict}
+          />
+
           {/* Policy settings — grouped by category */}
           {categories.map((cat) => (
             <div key={cat} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -395,8 +562,16 @@ export default function BulkPolicyPage() {
                                 User Restriction
                               </span>
                             )}
+                            {def.versionCaveat && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500">
+                                Full effect needs {def.versionCaveat.minLabel}
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-gray-400 mt-0.5 leading-tight">{def.description}</p>
+                          {def.versionCaveat && (
+                            <p className="text-[11px] text-gray-400 mt-0.5 italic leading-snug">{def.versionCaveat.note}</p>
+                          )}
                         </div>
 
                         {/* Binary toggle — only when item is enabled */}
@@ -469,6 +644,19 @@ export default function BulkPolicyPage() {
             </div>
           ))}
 
+          {/* Kiosk + Password conflict warning */}
+          {kioskPasswordConflict && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-5 py-3.5">
+              <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 leading-relaxed">
+                <strong>Kiosk Mode</strong> and <strong>Password Policy</strong> can&rsquo;t be deployed together.
+                Kiosk mode disables the device keyguard so lock task survives screen-off — Android only allows
+                that when there&rsquo;s no PIN/pattern/password set. Applying a password policy alongside kiosk
+                will silently break kiosk persistence on real devices. Disable one of the two to continue.
+              </p>
+            </div>
+          )}
+
           {/* Step 1 footer */}
           <div className="flex items-center justify-between bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
             <p className="text-sm text-gray-500">
@@ -477,7 +665,7 @@ export default function BulkPolicyPage() {
             </p>
             <button
               onClick={() => setStep(2)}
-              disabled={enabledCommands.length === 0}
+              disabled={enabledCommands.length === 0 || kioskPasswordConflict}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Next: Select Targets <ChevronRight size={14} />
@@ -576,37 +764,49 @@ export default function BulkPolicyPage() {
               {devices.length === 0 ? (
                 <p className="text-center py-10 text-sm text-gray-400">No devices match your filters</p>
               ) : (
-                devices.map((d) => (
-                  <div
-                    key={d.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleDevice(d.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') toggleDevice(d.id); }}
-                    className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
-                      selected.has(d.id) ? 'bg-blue-50' : 'active:bg-gray-50'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(d.id)}
-                      onChange={() => toggleDevice(d.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-4 h-4 accent-blue-600 cursor-pointer mt-1 shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium text-gray-900 leading-tight truncate">{d.deviceIdentifier}</p>
-                        <LiveStatusBadge lastSeen={d.lastSeen} />
-                      </div>
-                      <p className="text-xs text-gray-400">{d.model} · {d.androidVersion}</p>
-                      <div className="flex items-center justify-between gap-2 mt-1.5">
-                        <p className="text-xs text-gray-500 truncate">{d.assignedUserName ?? 'Unassigned'}</p>
-                        <ComplianceBadge status={d.complianceStatus} />
+                devices.map((d) => {
+                  const versionWarnings = getDeviceVersionWarnings(d);
+                  return (
+                    <div
+                      key={d.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleDevice(d.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') toggleDevice(d.id); }}
+                      className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                        selected.has(d.id) ? 'bg-blue-50' : 'active:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(d.id)}
+                        onChange={() => toggleDevice(d.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 accent-blue-600 cursor-pointer mt-1 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-gray-900 leading-tight truncate">{d.deviceIdentifier}</p>
+                          <LiveStatusBadge lastSeen={d.lastSeen} />
+                        </div>
+                        <p className="text-xs text-gray-400">{d.model} · {d.androidVersion}</p>
+                        <div className="flex items-center justify-between gap-2 mt-1.5">
+                          <p className="text-xs text-gray-500 truncate">{d.assignedUserName ?? 'Unassigned'}</p>
+                          <ComplianceBadge status={d.complianceStatus} />
+                        </div>
+                        {versionWarnings.length > 0 && (
+                          <p
+                            className="flex items-center gap-1 text-[11px] text-amber-600 mt-1"
+                            title={`Won't get full effect: ${versionWarnings.map((w) => w.label).join(', ')}`}
+                          >
+                            <AlertTriangle size={11} className="shrink-0" />
+                            Partial support for {versionWarnings.length} selected polic{versionWarnings.length > 1 ? 'ies' : 'y'}
+                          </p>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -638,7 +838,9 @@ export default function BulkPolicyPage() {
                       </td>
                     </tr>
                   ) : (
-                    devices.map((d) => (
+                    devices.map((d) => {
+                      const versionWarnings = getDeviceVersionWarnings(d);
+                      return (
                       <tr
                         key={d.id}
                         onClick={() => toggleDevice(d.id)}
@@ -660,11 +862,21 @@ export default function BulkPolicyPage() {
                           <p className="text-xs text-gray-400">{d.model}</p>
                         </td>
                         <td className="px-4 py-3 text-gray-600">{d.assignedUserName ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-500 text-xs font-mono">{d.androidVersion}</td>
+                        <td className="px-4 py-3 text-gray-500 text-xs font-mono">
+                          <div className="flex items-center gap-1.5">
+                            {d.androidVersion}
+                            {versionWarnings.length > 0 && (
+                              <span title={`Won't get full effect: ${versionWarnings.map((w) => w.label).join(', ')}`}>
+                                <AlertTriangle size={12} className="text-amber-500 shrink-0" />
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3"><LiveStatusBadge lastSeen={d.lastSeen} /></td>
                         <td className="px-4 py-3"><ComplianceBadge status={d.complianceStatus} /></td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
