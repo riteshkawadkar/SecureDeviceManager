@@ -33,14 +33,6 @@ namespace SDM.Infrastructure.Data
 
         public DbSet<SDM.Domain.Entities.AppEntry> Apps => Set<SDM.Domain.Entities.AppEntry>();
 
-        public DbSet<SDM.Domain.Entities.WifiProfile> WifiProfiles => Set<SDM.Domain.Entities.WifiProfile>();
-
-        public DbSet<SDM.Domain.Entities.VpnProfile> VpnProfiles => Set<SDM.Domain.Entities.VpnProfile>();
-
-        public DbSet<SDM.Domain.Entities.BlockedDomain> BlockedDomains => Set<SDM.Domain.Entities.BlockedDomain>();
-
-        public DbSet<SDM.Domain.Entities.AllowedDomain> AllowedDomains => Set<SDM.Domain.Entities.AllowedDomain>();
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

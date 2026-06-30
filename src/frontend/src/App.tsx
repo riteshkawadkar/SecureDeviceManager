@@ -9,7 +9,6 @@ import PolicyDetailPage from './pages/Policies/PolicyDetailPage';
 import RemoteActionsPage from './pages/RemoteActions/RemoteActionsPage';
 import BulkPolicyPage from './pages/Policies/BulkPolicyPage';
 import AppManagementPage from './pages/AppManagement/AppManagementPage';
-import NetworkPage from './pages/Network/NetworkPage';
 import ReportsPage from './pages/Reports/ReportsPage';
 import SettingsPage from './pages/Settings/SettingsPage';
 import SupportPage from './pages/Support/SupportPage';
@@ -43,7 +42,6 @@ export default function App() {
         <Route path="remote-actions" element={<RemoteActionsPage />} />
         <Route path="bulk-policies" element={<BulkPolicyPage />} />
         <Route path="app-management" element={<AppManagementPage />} />
-        <Route path="network" element={<NetworkPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="support" element={<SupportPage />} />

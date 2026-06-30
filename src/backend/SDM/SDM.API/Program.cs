@@ -42,7 +42,6 @@ builder.Services.AddScoped<IDashboardService, SDM.Infrastructure.Services.Dashbo
 builder.Services.AddScoped<IPolicyService, SDM.Infrastructure.Services.PolicyService>();
 builder.Services.AddScoped<IDeviceGroupService, SDM.Infrastructure.Services.DeviceGroupService>();
 builder.Services.AddScoped<IAppService, SDM.Infrastructure.Services.AppService>();
-builder.Services.AddScoped<INetworkService, SDM.Infrastructure.Services.NetworkService>();
 builder.Services.AddScoped<IAuditLogService, SDM.Infrastructure.Services.AuditLogService>();
 builder.Services.AddScoped<IViolationService, SDM.Infrastructure.Services.ViolationService>();
 
