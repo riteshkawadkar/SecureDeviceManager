@@ -24,6 +24,9 @@ namespace SDM.API.Controllers
             public List<Guid> DeviceIds { get; set; } = new();
             public string CommandType { get; set; } = string.Empty;
             public JsonElement Payload { get; set; }
+            // Pass the same BatchId across multiple calls (e.g. one call per policy in a Bulk
+            // Policy Deployment) so they group into a single history row per device.
+            public Guid? BatchId { get; set; }
         }
 
         [HttpPost("bulk")]
@@ -43,7 +46,7 @@ namespace SDM.API.Controllers
             var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
             Guid? actorUserId = Guid.TryParse(sub, out var actorId) ? actorId : null;
 
-            var result = await _commandService.CreateBulkCommandAsync(request.DeviceIds, request.CommandType, payloadStr, actorUserId);
+            var result = await _commandService.CreateBulkCommandAsync(request.DeviceIds, request.CommandType, payloadStr, actorUserId, request.BatchId);
             return Ok(result);
         }
     }

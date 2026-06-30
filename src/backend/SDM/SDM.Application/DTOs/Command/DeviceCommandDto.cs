@@ -13,6 +13,8 @@ namespace SDM.Application.DTOs.Command
         public int MaxRetries { get; set; }
         public DateTime CreatedOn { get; set; }
         public DateTime? ExecutedOn { get; set; }
+        public DateTime? AcknowledgedOn { get; set; }
+        public Guid? BatchId { get; set; }
         /// <summary>Admin who issued the command, resolved from the "CommandCreated" audit log entry. Null for system-issued commands (e.g. Hangfire retries) or commands created before this attribution was added.</summary>
         public Guid? CreatedByUserId { get; set; }
         public string? CreatedByName { get; set; }

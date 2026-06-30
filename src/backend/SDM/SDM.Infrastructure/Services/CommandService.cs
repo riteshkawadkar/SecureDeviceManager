@@ -18,7 +18,7 @@ namespace SDM.Infrastructure.Services
             _pushService = pushService;
         }
 
-        public async Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload, Guid? actorUserId = null)
+        public async Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload, Guid? actorUserId = null, Guid? batchId = null)
         {
             var device = await _db.Devices.FindAsync(deviceId);
             if (device == null) throw new Exception("Device not found");
@@ -30,7 +30,8 @@ namespace SDM.Infrastructure.Services
                 CommandType = commandType,
                 Payload = payload,
                 Status = CommandStatus.Pending,
-                CreatedOn = DateTime.UtcNow
+                CreatedOn = DateTime.UtcNow,
+                BatchId = batchId ?? Guid.NewGuid()
             };
 
             _db.DeviceCommands.Add(cmd);
@@ -76,14 +77,19 @@ namespace SDM.Infrastructure.Services
             return cmd;
         }
 
-        public async Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload, Guid? actorUserId = null)
+        public async Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload, Guid? actorUserId = null, Guid? batchId = null)
         {
+            // All devices (and, when the caller reuses this batchId across multiple calls — e.g.
+            // one call per policy in a Bulk Policy Deployment — all policies too) share one batchId
+            // so a single device's command history groups them into one event row.
+            var effectiveBatchId = batchId ?? Guid.NewGuid();
+
             var results = new List<BulkCommandDeviceResult>();
             foreach (var deviceId in deviceIds)
             {
                 try
                 {
-                    var cmd = await CreateCommandAsync(deviceId, commandType, payload, actorUserId);
+                    var cmd = await CreateCommandAsync(deviceId, commandType, payload, actorUserId, effectiveBatchId);
                     results.Add(new BulkCommandDeviceResult { DeviceId = deviceId, Success = true, CommandId = cmd.Id });
                 }
                 catch (Exception ex)
@@ -120,6 +126,18 @@ namespace SDM.Infrastructure.Services
             }
 
             await _db.SaveChangesAsync();
+        }
+
+        public async Task AcknowledgeCommandAsync(Guid deviceId, Guid commandId)
+        {
+            var cmd = await _db.DeviceCommands.FirstOrDefaultAsync(c => c.Id == commandId && c.DeviceId == deviceId);
+            if (cmd == null) throw new Exception("Command not found");
+
+            if (cmd.AcknowledgedOn == null)
+            {
+                cmd.AcknowledgedOn = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
         }
     }
 }

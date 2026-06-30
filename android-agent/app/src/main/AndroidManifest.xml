@@ -5,6 +5,8 @@
 	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 	<uses-permission android:name="android.permission.CAMERA" />
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+	<!-- Android 13+ requires this to post the SendAlert notification. -->
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
 	<!-- Android 11+ package visibility: required for getLaunchIntentForPackage() to
 	     resolve other apps' launcher intents (e.g. Chrome) for kiosk mode. Without this,
@@ -69,6 +71,10 @@
 		<receiver
 			android:name=".InstallReceiver"
 			android:exported="true" />
+
+		<receiver
+			android:name=".AlertAckReceiver"
+			android:exported="false" />
 
 		<receiver
 			android:name=".BootReceiver"

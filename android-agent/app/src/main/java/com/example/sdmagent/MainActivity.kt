@@ -102,6 +102,13 @@ interface ApiService {
         @Body req: ReportStatusRequest
     ): Response<Unit>
 
+    @POST("api/devices/{deviceId}/commands/{commandId}/acknowledge")
+    suspend fun acknowledgeCommand(
+        @Header("Authorization") auth: String,
+        @Path("deviceId") deviceId: String,
+        @Path("commandId") commandId: String
+    ): Response<Unit>
+
     @POST("api/devices/{deviceId}/heartbeat")
     suspend fun heartbeat(
         @Header("Authorization") auth: String,

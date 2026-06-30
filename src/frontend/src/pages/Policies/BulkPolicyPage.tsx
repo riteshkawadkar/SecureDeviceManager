@@ -378,9 +378,12 @@ export default function BulkPolicyPage() {
   const mutation = useMutation({
     mutationFn: async () => {
       const deviceIds = Array.from(selected);
+      // Shared across every policy in this deployment so each affected device's Policy History
+      // groups them into a single event row instead of one row per policy.
+      const batchId = crypto.randomUUID();
       let total = 0, succeeded = 0, failed = 0;
       for (const cmd of enabledCommands) {
-        const r: BulkCommandResult = await sendBulkCommand({ deviceIds, commandType: cmd.commandType, payload: cmd.payload });
+        const r: BulkCommandResult = await sendBulkCommand({ deviceIds, commandType: cmd.commandType, payload: cmd.payload, batchId });
         total += r.total;
         succeeded += r.succeeded;
         failed += r.failed;

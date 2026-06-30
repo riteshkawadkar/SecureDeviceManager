@@ -34,5 +34,5 @@ export interface BulkCommandResult {
   results: Array<{ deviceId: string; success: boolean; commandId?: string; error?: string }>;
 }
 
-export const sendBulkCommand = (req: { deviceIds: string[]; commandType: string; payload?: object }) =>
+export const sendBulkCommand = (req: { deviceIds: string[]; commandType: string; payload?: object; batchId?: string }) =>
   client.post<BulkCommandResult>('/commands/bulk', req).then((r) => r.data);

@@ -5,8 +5,9 @@ namespace SDM.Application.Interfaces
 {
     public interface ICommandService
     {
-        Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload, Guid? actorUserId = null);
+        Task<DeviceCommand> CreateCommandAsync(Guid deviceId, string commandType, string payload, Guid? actorUserId = null, Guid? batchId = null);
         Task ReportCommandStatusAsync(Guid deviceId, Guid commandId, bool success);
-        Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload, Guid? actorUserId = null);
+        Task<BulkCommandResult> CreateBulkCommandAsync(IEnumerable<Guid> deviceIds, string commandType, string payload, Guid? actorUserId = null, Guid? batchId = null);
+        Task AcknowledgeCommandAsync(Guid deviceId, Guid commandId);
     }
 }

@@ -70,6 +70,14 @@ namespace SDM.API.Controllers
             return NoContent();
         }
 
+        [Authorize(Roles = "Device")]
+        [HttpPost("{id:guid}/acknowledge")]
+        public async Task<IActionResult> Acknowledge([FromRoute] Guid deviceId, [FromRoute] Guid id)
+        {
+            await _commandService.AcknowledgeCommandAsync(deviceId, id);
+            return NoContent();
+        }
+
         public class ReportStatusRequest
         {
             public bool Success { get; set; }

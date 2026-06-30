@@ -209,6 +209,8 @@ namespace SDM.Infrastructure.Services
                     MaxRetries = c.MaxRetries,
                     CreatedOn = c.CreatedOn,
                     ExecutedOn = c.ExecutedOn,
+                    AcknowledgedOn = c.AcknowledgedOn,
+                    BatchId = c.BatchId,
                     CreatedByUserId = creator?.Id,
                     CreatedByName = creator?.Name,
                 };

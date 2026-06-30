@@ -1,11 +1,17 @@
 package com.example.sdmagent
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -27,6 +33,8 @@ class FCMService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "FCMService"
+        private const val ALERT_CHANNEL_ID = "sdm_alerts"
+        private const val ALERT_NOTIFICATION_ID = 9001
 
         // UserManager restriction key strings (avoids API-level import issues)
         private const val RESTRICT_USB          = "no_usb_file_transfer"
@@ -136,6 +144,39 @@ class FCMService : FirebaseMessagingService() {
                 "WipeData", "wipe-data" -> {
                     // dpm.wipeData(0)  // uncomment to enable factory reset
                     Log.d(TAG, "WipeData received (disabled for safety)")
+                    success = true
+                }
+
+                "Reboot" -> {
+                    if (isDeviceOwner) {
+                        dpm.reboot(adminComponent)
+                        Log.d(TAG, "Reboot requested")
+                        success = true
+                    } else {
+                        Log.w(TAG, "Reboot requires Device Owner")
+                    }
+                }
+
+                // ── Alert ────────────────────────────────────────────────────
+                // Pushes a high-priority notification with an admin-supplied message.
+                "SendAlert" -> {
+                    val message = data["message"]?.takeIf { it.isNotBlank() } ?: "Alert from IT administrator"
+                    if (isDeviceOwner) {
+                        // Best-effort: on API 33+ POST_NOTIFICATIONS is a runtime permission: with no
+                        // foreground user interaction to grant it (e.g. in kiosk mode), Device Owner
+                        // can silently grant it instead.
+                        try {
+                            dpm.setPermissionGrantState(
+                                adminComponent, packageName,
+                                android.Manifest.permission.POST_NOTIFICATIONS,
+                                DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                            )
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not auto-grant POST_NOTIFICATIONS", e)
+                        }
+                    }
+                    showAlertNotification(message, commandId)
+                    Log.d(TAG, "Alert shown: $message")
                     success = true
                 }
 
@@ -384,6 +425,42 @@ class FCMService : FirebaseMessagingService() {
 
         if (commandId.isNotBlank()) PolicyStore.markResult(this, commandId, success)
         reportStatus(commandId, success)
+    }
+
+    private fun showAlertNotification(message: String, commandId: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(
+                NotificationChannel(ALERT_CHANNEL_ID, "IT Alerts", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Messages pushed by the MDM administrator"
+                }
+            )
+        }
+
+        // Both tapping the notification body and tapping "Mark as Read" report the read
+        // receipt back to the backend — swipe-dismissing it does not, so that genuinely
+        // reflects whether the user saw the message rather than just that it was delivered.
+        val ackIntent = Intent(this, AlertAckReceiver::class.java).apply {
+            putExtra(AlertAckReceiver.EXTRA_COMMAND_ID, commandId)
+            putExtra(AlertAckReceiver.EXTRA_NOTIFICATION_ID, ALERT_NOTIFICATION_ID)
+        }
+        val ackPendingIntent = PendingIntent.getBroadcast(
+            this, ALERT_NOTIFICATION_ID, ackIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_bell)
+            .setContentTitle("Message from IT Administrator")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(true)
+            .setContentIntent(ackPendingIntent)
+            .addAction(R.drawable.ic_check_circle, "Mark as Read", ackPendingIntent)
+            .build()
+        NotificationManagerCompat.from(this).notify(ALERT_NOTIFICATION_ID, notification)
     }
 
     private fun reportStatus(commandId: String, success: Boolean) {

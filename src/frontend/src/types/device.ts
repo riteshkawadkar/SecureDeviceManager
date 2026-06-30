@@ -38,6 +38,8 @@ export interface DeviceCommand {
   maxRetries: number;
   createdOn: string;
   executedOn: string | null;
+  acknowledgedOn: string | null;
+  batchId: string | null;
   createdByUserId: string | null;
   createdByName: string | null;
 }

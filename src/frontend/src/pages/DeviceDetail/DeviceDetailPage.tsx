@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Lock, Trash2, RotateCw, Bell, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck,
-  ChevronDown, History,
+  ChevronDown, ChevronRight, History, Layers, Zap,
 } from 'lucide-react';
 import { getDevice, listViolations, listCommands, sendCommand } from '../../api/devices';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
@@ -60,6 +60,70 @@ function isCurrentlyApplied({ restrictive, latest }: AppliedPolicy): boolean {
   return restrictive && latest.status !== COMMAND_FAILED;
 }
 
+/** Every SendAlert command sent to this device, most recent first, with its message text. */
+function buildAlertHistory(commands: DeviceCommand[] | undefined): Array<{ cmd: DeviceCommand; message: string }> {
+  return (commands ?? [])
+    .filter((c) => c.commandType === 'SendAlert')
+    .map((cmd) => {
+      const parsed = parsePayload(cmd.payload);
+      const message = parsed && typeof parsed === 'object' ? String((parsed as Record<string, unknown>).message ?? '') : '';
+      return { cmd, message: message || '(no message)' };
+    })
+    .sort((a, b) => new Date(b.cmd.createdOn).getTime() - new Date(a.cmd.createdOn).getTime());
+}
+
+// ─── Activity History ───────────────────────────────────────────────────────
+// One row per "event" — every command created together (same BatchId, e.g. all
+// policies in a single Bulk Policy Deployment click) collapses into one row with
+// an expandable breakdown; a standalone command (Lock, a single policy Enforce,
+// a Send Alert) has a unique BatchId of its own and naturally renders as one row.
+
+type ActivityItem = {
+  cmd: DeviceCommand;
+  label: string;
+  icon: React.ElementType;
+  isPolicy: boolean;
+  restrictive?: boolean;
+  directionLabel?: string;
+};
+
+type ActivityEvent = { key: string; items: ActivityItem[]; when: string; by: string | null };
+
+function describeCommand(cmd: DeviceCommand): ActivityItem {
+  const payload = parsePayload(cmd.payload);
+  const def = findPolicyDefForCommand(cmd.commandType, payload);
+  if (def) {
+    const restrictive = isRestrictiveDirection(def, cmd.commandType, payload);
+    const directionLabel = restrictive
+      ? def.restrictionLabels?.restrict ?? def.binaryAction?.trueLabel ?? 'Applied'
+      : def.restrictionLabels?.lift ?? def.binaryAction?.falseLabel ?? 'Lifted';
+    return { cmd, label: def.label, icon: def.icon, isPolicy: true, restrictive, directionLabel };
+  }
+  const known = DEVICE_COMMANDS.find((d) => d.type === cmd.commandType);
+  if (known) return { cmd, label: known.label, icon: known.icon, isPolicy: false };
+  return { cmd, label: cmd.commandType, icon: Zap, isPolicy: false };
+}
+
+function buildActivityHistory(commands: DeviceCommand[] | undefined): ActivityEvent[] {
+  const groups = new Map<string, DeviceCommand[]>();
+  for (const cmd of commands ?? []) {
+    const key = cmd.batchId ?? cmd.id;
+    const list = groups.get(key);
+    if (list) list.push(cmd); else groups.set(key, [cmd]);
+  }
+  const events: ActivityEvent[] = [];
+  for (const [key, cmds] of groups) {
+    const sorted = [...cmds].sort((a, b) => new Date(a.createdOn).getTime() - new Date(b.createdOn).getTime());
+    events.push({
+      key,
+      items: sorted.map(describeCommand),
+      when: sorted[0].createdOn,
+      by: sorted.find((c) => c.createdByName)?.createdByName ?? null,
+    });
+  }
+  return events.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
+}
+
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -69,6 +133,7 @@ export default function DeviceDetailPage() {
   const [actionsMenuPos, setActionsMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
@@ -99,6 +164,16 @@ export default function DeviceDetailPage() {
   // touched, regardless of whether it's still in effect).
   const policyLatestState = useMemo(() => buildAppliedPolicies(commands), [commands]);
   const appliedPolicies = useMemo(() => policyLatestState.filter(isCurrentlyApplied), [policyLatestState]);
+  const alertHistory = useMemo(() => buildAlertHistory(commands), [commands]);
+  const activityHistory = useMemo(() => buildActivityHistory(commands), [commands]);
+
+  function toggleEvent(key: string) {
+    setExpandedEvents((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   // Of the policies currently applied to this device, which ones won't get their full effect
   // on its reported Android version (e.g. Wi-Fi Toggle on Android 9 only blocks config
@@ -372,60 +447,133 @@ export default function DeviceDetailPage() {
               ))}
             </div>
           </div>
+
+          {/* Recent Alerts — SendAlert commands with a read receipt from the device's "Mark as Read" action */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Bell size={14} className="text-gray-400" /> Recent Alerts
+              </h3>
+              {alertHistory.length > 0 && <span className="text-xs text-gray-400">{alertHistory.length} sent</span>}
+            </div>
+            <div className="divide-y divide-gray-50">
+              {alertHistory.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No alerts sent to this device yet</p>
+              ) : (
+                alertHistory.map(({ cmd, message }) => {
+                  const read = !!cmd.acknowledgedOn;
+                  return (
+                    <div key={cmd.id} className="flex items-start justify-between gap-3 px-5 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-700 break-words">{message}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {formatRelativeTime(cmd.createdOn)}{cmd.createdByName ? ` · by ${cmd.createdByName}` : ''}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0 ${
+                          read ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                        }`}
+                        title={read ? `Read ${formatDate(cmd.acknowledgedOn!)}` : undefined}
+                      >
+                        {read ? 'Read' : 'Unread'}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Policy History — every policy this device has ever touched: when, by whom, and whether it's currently applied */}
+      {/* Policy History — one row per event: a bulk deployment's policies group into one row,
+          a standalone remote command gets its own single-item row */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             <History size={14} className="text-gray-400" /> Policy History
           </h3>
-          {policyLatestState.length > 0 && <span className="text-xs text-gray-400">{policyLatestState.length} polic{policyLatestState.length > 1 ? 'ies' : 'y'}</span>}
+          {activityHistory.length > 0 && <span className="text-xs text-gray-400">{activityHistory.length} event{activityHistory.length > 1 ? 's' : ''}</span>}
         </div>
-        {policyLatestState.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-6">No policy commands have been sent to this device yet</p>
+        {activityHistory.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-6">No commands have been sent to this device yet</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/70">
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Policy</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">When</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">By</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Applied</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {policyLatestState.map((entry) => {
-                  const { def, latest } = entry;
-                  const Icon = def.icon;
-                  const applied = isCurrentlyApplied(entry);
-                  const failed = latest.status === COMMAND_FAILED;
-                  return (
-                    <tr key={def.id}>
-                      <td className="px-5 py-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Icon size={15} className="text-gray-400 shrink-0" />
-                          <span className="text-gray-800 font-medium truncate">{def.label}</span>
+          <div className="divide-y divide-gray-50">
+            {activityHistory.map((evt) => {
+              const total = evt.items.length;
+              const successCount = evt.items.filter((it) => it.cmd.status !== COMMAND_FAILED).length;
+              const aggCls = successCount === total
+                ? 'bg-green-100 text-green-700'
+                : successCount === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700';
+              const aggLabel = successCount === total ? 'Applied' : successCount === 0 ? 'Failed' : `${successCount}/${total} Applied`;
+              const single = total === 1 ? evt.items[0] : null;
+              const PrimaryIcon = single ? single.icon : Layers;
+              const title = single
+                ? single.label
+                : evt.items.every((it) => it.isPolicy)
+                  ? `${total} Policies Applied`
+                  : `${total} Commands Sent`;
+              const expanded = expandedEvents.has(evt.key);
+
+              return (
+                <div key={evt.key} className="px-5 py-3">
+                  <button
+                    onClick={() => total > 1 && toggleEvent(evt.key)}
+                    className={`w-full flex items-center justify-between gap-3 text-left ${total > 1 ? 'cursor-pointer' : 'cursor-default'}`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {total > 1 ? (
+                        <ChevronRight size={14} className={`text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                      ) : (
+                        <PrimaryIcon size={15} className="text-gray-400 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-gray-800 truncate">{title}</p>
+                          {single?.isPolicy && (
+                            <span className={`text-xs font-semibold shrink-0 ${single.restrictive ? 'text-amber-600' : 'text-gray-400'}`}>
+                              {single.directionLabel}
+                            </span>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap" title={formatDate(latest.createdOn)}>
-                        {formatRelativeTime(latest.executedOn ?? latest.createdOn)}
-                      </td>
-                      <td className="px-5 py-2.5 text-gray-500 whitespace-nowrap">{latest.createdByName ?? '—'}</td>
-                      <td className="px-5 py-2.5">
-                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium ${
-                          applied ? 'bg-green-100 text-green-700' : failed ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {applied ? 'Applied' : failed ? 'Failed' : 'Not Applied'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <p className="text-xs text-gray-400" title={formatDate(evt.when)}>
+                          {formatRelativeTime(evt.when)}{evt.by ? ` · by ${evt.by}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0 ${aggCls}`}>
+                      {aggLabel}
+                    </span>
+                  </button>
+
+                  {expanded && total > 1 && (
+                    <div className="mt-2 ml-6 space-y-1.5 border-l border-gray-100 pl-3">
+                      {evt.items.map((it) => {
+                        const statusBadge = COMMAND_STATUS_BADGE[it.cmd.status] ?? COMMAND_STATUS_BADGE[0];
+                        const ItemIcon = it.icon;
+                        return (
+                          <div key={it.cmd.id} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <ItemIcon size={12} className="text-gray-400 shrink-0" />
+                              <span className="text-xs text-gray-600 truncate">{it.label}</span>
+                              {it.isPolicy && (
+                                <span className={`text-[11px] font-medium shrink-0 ${it.restrictive ? 'text-amber-600' : 'text-gray-400'}`}>
+                                  {it.directionLabel}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium shrink-0 ${statusBadge.cls}`}>
+                              {statusBadge.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
