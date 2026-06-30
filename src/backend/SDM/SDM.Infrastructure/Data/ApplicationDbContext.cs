@@ -39,6 +39,8 @@ namespace SDM.Infrastructure.Data
 
         public DbSet<SDM.Domain.Entities.DeviceInstalledApp> DeviceInstalledApps => Set<SDM.Domain.Entities.DeviceInstalledApp>();
 
+        public DbSet<SDM.Domain.Entities.Enterprise> Enterprises => Set<SDM.Domain.Entities.Enterprise>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

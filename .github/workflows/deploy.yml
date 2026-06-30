@@ -2,7 +2,7 @@ name: Build and Deploy to Ubuntu Docker VM
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
     paths:
       - 'src/backend/**'
       - 'src/frontend/**'
@@ -52,7 +52,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key "$SERVER_USER@$SERVER_HOST" "
             set -e
             cd ~/SecureDeviceManager
-            git pull origin master
+            git pull origin main
             docker compose down --remove-orphans
             docker container rm -f sdm-postgres sdm-api sdm-pgadmin sdm-frontend 2>/dev/null || true
             docker compose build --no-cache api frontend

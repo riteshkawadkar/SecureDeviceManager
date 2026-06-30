@@ -21,6 +21,9 @@ builder.Services.AddSwaggerGen();
 builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection("Jwt"));
 
+builder.Services.Configure<GoogleEnterpriseSettings>(
+    builder.Configuration.GetSection("GoogleEnterprise"));
+
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, SDM.Infrastructure.Services.UserService>();
 
@@ -45,6 +48,7 @@ builder.Services.AddScoped<IDeviceGroupService, SDM.Infrastructure.Services.Devi
 builder.Services.AddScoped<IAppService, SDM.Infrastructure.Services.AppService>();
 builder.Services.AddScoped<IAppPackageService, SDM.Infrastructure.Services.AppPackageService>();
 builder.Services.AddScoped<IDeviceInventoryService, SDM.Infrastructure.Services.DeviceInventoryService>();
+builder.Services.AddScoped<IAndroidEnterpriseService, SDM.Infrastructure.Services.AndroidEnterpriseService>();
 builder.Services.AddScoped<IAuditLogService, SDM.Infrastructure.Services.AuditLogService>();
 builder.Services.AddScoped<IViolationService, SDM.Infrastructure.Services.ViolationService>();
 
