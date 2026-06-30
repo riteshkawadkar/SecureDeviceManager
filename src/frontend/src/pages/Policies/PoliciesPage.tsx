@@ -301,12 +301,12 @@ export default function PoliciesPage() {
 
       <div className="space-y-5">
         {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
               <Shield size={18} className="text-gray-700" aria-hidden="true" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold text-gray-900 text-balance">Policy Management</h1>
               <p className="text-sm text-gray-500">Create and manage device policies for security, apps, and compliance</p>
             </div>
@@ -433,12 +433,24 @@ export default function PoliciesPage() {
         {/* ── Table panel ── */}
         {tab === 'policies' ? (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-100">
               <h2 className="text-base font-semibold text-gray-900">Active Policies</h2>
               <p className="text-sm text-gray-500 mt-0.5">Manage and monitor all policies across your organization</p>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile card list */}
+            <div className="md:hidden divide-y divide-gray-50">
+              {isLoading ? (
+                <p className="text-center py-12 text-gray-400 text-sm">Loading…</p>
+              ) : filtered.length === 0 ? (
+                <p className="text-center py-12 text-gray-400 text-sm">No policies match your filters.</p>
+              ) : (
+                filtered.map((policy) => <PolicyCard key={policy.id} policy={policy} />)
+              )}
+            </div>
+
+            {/* Table — tablet/desktop */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/60">
@@ -538,6 +550,34 @@ function PolicyRow({ policy }: { policy: Policy }) {
         </Link>
       </td>
     </tr>
+  );
+}
+
+/* ── Policy card (mobile) ───────────────────────────────────────────────────── */
+function PolicyCard({ policy }: { policy: Policy }) {
+  const formattedDate = new Intl.DateTimeFormat('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(policy.createdOn));
+
+  return (
+    <Link
+      to={`/policies/${policy.id}`}
+      className="block px-4 py-3 active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-gray-900 truncate">{policy.name}</p>
+          <p className="text-xs text-gray-400 truncate mt-0.5">{getDescription(policy)}</p>
+        </div>
+        <StatusBadge isEnabled={policy.isEnabled} />
+      </div>
+      <div className="flex items-center justify-between gap-3 mt-2.5">
+        <TypeBadge category={policy.category} />
+        <p className="text-xs text-gray-400 shrink-0">By Admin User · {formattedDate}</p>
+      </div>
+    </Link>
   );
 }
 

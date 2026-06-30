@@ -1,259 +1,16 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-  Shield, Smartphone, Wifi, Bluetooth, Camera, Lock, Globe,
-  Package, ChevronRight, ChevronLeft, CheckCircle2, Search,
-  ChevronDown, Layers, HardDrive, AlertTriangle, Loader2,
-  Plane, Radio, Volume2, MessageSquare, Phone, Trash2, Users,
-  MapPin, RotateCcw, WifiOff, BluetoothOff,
+  Shield, Smartphone, Wifi, Package,
+  ChevronRight, ChevronLeft, CheckCircle2, Search,
+  ChevronDown, Layers, AlertTriangle, Loader2, Lock,
 } from 'lucide-react';
 import { listDevices, sendBulkCommand } from '../../api/devices';
 import type { BulkCommandResult } from '../../api/devices';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import type { Device, PagedResult } from '../../types/device';
 import { ComplianceStatus } from '../../types/device';
-
-// ─── Policy definitions ────────────────────────────────────────────────────────
-
-type ParamType = 'text' | 'number' | 'select' | 'textarea';
-
-type PolicyParam = {
-  key: string;
-  label: string;
-  type: ParamType;
-  options?: string[];
-  placeholder?: string;
-  defaultValue?: string | number;
-};
-
-type PolicyDef = {
-  id: string;
-  category: string;
-  icon: React.ElementType;
-  label: string;
-  description: string;
-  requiresOwner: boolean;
-  /**
-   * Android UserManager restriction key (e.g. "no_camera").
-   * When set, emits a single SetUserRestriction command with {restriction, enabled} payload.
-   * action=true → apply restriction; action=false → lift restriction.
-   */
-  restrictionKey?: string;
-  /** UI labels for the restrict/allow toggle when restrictionKey is set. */
-  restrictionLabels?: { restrict: string; lift: string };
-  /** Binary command pair where each direction is a distinct command type. */
-  binaryAction?: { trueLabel: string; falseLabel: string; trueCmd: string; falseCmd: string };
-  /** Single command type (no binary direction). */
-  fixedCmd?: string;
-  params?: PolicyParam[];
-  /** When set, params are only shown when action === this value. */
-  showParamsWhen?: boolean;
-};
-
-const POLICY_DEFS: PolicyDef[] = [
-  // ── Security ────────────────────────────────────────────────────────────────
-  {
-    id: 'password',
-    category: 'Security',
-    icon: Shield,
-    label: 'Password Policy',
-    description: 'Enforce minimum password complexity and length on all target devices',
-    requiresOwner: false,
-    fixedCmd: 'SetPasswordPolicy',
-    params: [
-      { key: 'minLength', label: 'Minimum Length', type: 'number', defaultValue: 8, placeholder: '8' },
-      {
-        key: 'quality',
-        label: 'Complexity',
-        type: 'select',
-        options: ['NUMERIC', 'NUMERIC_COMPLEX', 'ALPHABETIC', 'ALPHANUMERIC', 'COMPLEX'],
-        defaultValue: 'ALPHANUMERIC',
-      },
-    ],
-  },
-  {
-    id: 'camera',
-    category: 'Security',
-    icon: Camera,
-    label: 'Camera Access',
-    description: 'Enable or disable the device camera system-wide',
-    requiresOwner: false,
-    binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableCamera', falseCmd: 'EnableCamera' },
-  },
-  {
-    id: 'factoryReset',
-    category: 'Security',
-    icon: RotateCcw,
-    label: 'Factory Reset',
-    description: 'Prevent users from wiping the device via Settings → Factory Reset (no_factory_reset)',
-    requiresOwner: true,
-    restrictionKey: 'no_factory_reset',
-    restrictionLabels: { restrict: 'Prevent', lift: 'Allow' },
-  },
-  // ── Network & Connectivity ──────────────────────────────────────────────────
-  {
-    id: 'wifi',
-    category: 'Network & Connectivity',
-    icon: Wifi,
-    label: 'Wi-Fi Toggle',
-    description: 'Turn the Wi-Fi adapter on or off entirely',
-    requiresOwner: true,
-    binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableWifi', falseCmd: 'EnableWifi' },
-  },
-  {
-    id: 'wifiConfig',
-    category: 'Network & Connectivity',
-    icon: WifiOff,
-    label: 'Wi-Fi Configuration Lock',
-    description: 'Prevent users from adding, removing or changing Wi-Fi access points (no_config_wifi)',
-    requiresOwner: true,
-    restrictionKey: 'no_config_wifi',
-    restrictionLabels: { restrict: 'Lock', lift: 'Unlock' },
-  },
-  {
-    id: 'bluetooth',
-    category: 'Network & Connectivity',
-    icon: Bluetooth,
-    label: 'Bluetooth Toggle',
-    description: 'Turn the Bluetooth adapter on or off entirely',
-    requiresOwner: true,
-    binaryAction: { trueLabel: 'Disable', falseLabel: 'Enable', trueCmd: 'DisableBluetooth', falseCmd: 'EnableBluetooth' },
-  },
-  {
-    id: 'bluetoothConfig',
-    category: 'Network & Connectivity',
-    icon: BluetoothOff,
-    label: 'Bluetooth Configuration Lock',
-    description: 'Prevent users from pairing new Bluetooth devices or changing Bluetooth settings (no_config_bluetooth)',
-    requiresOwner: true,
-    restrictionKey: 'no_config_bluetooth',
-    restrictionLabels: { restrict: 'Lock', lift: 'Unlock' },
-  },
-  {
-    id: 'airplaneMode',
-    category: 'Network & Connectivity',
-    icon: Plane,
-    label: 'Airplane Mode',
-    description: 'Prevent users from enabling Airplane Mode and cutting all radio communication (no_airplane_mode)',
-    requiresOwner: true,
-    restrictionKey: 'no_airplane_mode',
-    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
-  },
-  {
-    id: 'usb',
-    category: 'Network & Connectivity',
-    icon: HardDrive,
-    label: 'USB File Transfer',
-    description: 'Block or allow USB file transfer (MTP/PTP) from this device (no_usb_file_transfer)',
-    requiresOwner: true,
-    binaryAction: { trueLabel: 'Block', falseLabel: 'Allow', trueCmd: 'BlockUsb', falseCmd: 'UnblockUsb' },
-  },
-  {
-    id: 'tethering',
-    category: 'Network & Connectivity',
-    icon: Radio,
-    label: 'Mobile Hotspot & Tethering',
-    description: 'Prevent users from sharing mobile data as a Wi-Fi hotspot or via USB tethering (no_config_tether)',
-    requiresOwner: true,
-    restrictionKey: 'no_config_tether',
-    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
-  },
-  // ── Device & Hardware ────────────────────────────────────────────────────────
-  {
-    id: 'volume',
-    category: 'Device & Hardware',
-    icon: Volume2,
-    label: 'Volume Control',
-    description: 'Prevent users from adjusting the global device volume (no_adjust_volume)',
-    requiresOwner: false,
-    restrictionKey: 'no_adjust_volume',
-    restrictionLabels: { restrict: 'Lock', lift: 'Allow' },
-  },
-  {
-    id: 'sms',
-    category: 'Device & Hardware',
-    icon: MessageSquare,
-    label: 'SMS Messaging',
-    description: 'Block sending and receiving SMS messages on the device (no_sms)',
-    requiresOwner: true,
-    restrictionKey: 'no_sms',
-    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
-  },
-  {
-    id: 'outgoingCalls',
-    category: 'Device & Hardware',
-    icon: Phone,
-    label: 'Outgoing Phone Calls',
-    description: 'Block standard outgoing calls — emergency calls (911/112) are always permitted (no_outgoing_calls)',
-    requiresOwner: true,
-    restrictionKey: 'no_outgoing_calls',
-    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
-  },
-  // ── Apps & System ───────────────────────────────────────────────────────────
-  {
-    id: 'appInstall',
-    category: 'Apps & System',
-    icon: Package,
-    label: 'App Installation',
-    description: 'Control whether users can install new applications (no_install_apps)',
-    requiresOwner: true,
-    binaryAction: { trueLabel: 'Restrict', falseLabel: 'Allow', trueCmd: 'DisableAppInstall', falseCmd: 'EnableAppInstall' },
-  },
-  {
-    id: 'appUninstall',
-    category: 'Apps & System',
-    icon: Trash2,
-    label: 'App Uninstall',
-    description: 'Prevent users from deleting any installed application (no_uninstall_apps)',
-    requiresOwner: true,
-    restrictionKey: 'no_uninstall_apps',
-    restrictionLabels: { restrict: 'Prevent', lift: 'Allow' },
-  },
-  {
-    id: 'kiosk',
-    category: 'Apps & System',
-    icon: Smartphone,
-    label: 'Kiosk Mode',
-    description: 'Lock the device to a single application (task-lock / screen-pinning)',
-    requiresOwner: true,
-    binaryAction: { trueLabel: 'Enable', falseLabel: 'Disable', trueCmd: 'EnableKiosk', falseCmd: 'DisableKiosk' },
-    params: [{ key: 'packageName', label: 'App Package Name', type: 'text', placeholder: 'com.example.app' }],
-    showParamsWhen: true,
-  },
-  {
-    id: 'webRestrictions',
-    category: 'Apps & System',
-    icon: Globe,
-    label: 'Web Restrictions',
-    description: 'Apply URL block/allow lists to Chrome via managed configuration',
-    requiresOwner: true,
-    fixedCmd: 'SetWebRestrictions',
-    params: [
-      { key: 'blockedUrls', label: 'Blocked URLs (one per line)', type: 'textarea', placeholder: '*.evil.com\nadult.com' },
-      { key: 'allowedUrls', label: 'Allowed URLs (one per line)', type: 'textarea', placeholder: 'safe.internal\nwork.com' },
-    ],
-  },
-  {
-    id: 'accountModification',
-    category: 'Apps & System',
-    icon: Users,
-    label: 'Account Modification',
-    description: 'Prevent users from adding or removing Google/corporate accounts on the device (no_modify_accounts)',
-    requiresOwner: true,
-    restrictionKey: 'no_modify_accounts',
-    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
-  },
-  {
-    id: 'locationSharing',
-    category: 'Apps & System',
-    icon: MapPin,
-    label: 'Location Sharing',
-    description: 'Prevent users from modifying location sharing settings or disabling GPS (no_share_location)',
-    requiresOwner: true,
-    restrictionKey: 'no_share_location',
-    restrictionLabels: { restrict: 'Restrict', lift: 'Allow' },
-  },
-];
+import { POLICY_DEFS } from '../../data/policyDefs';
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
@@ -501,23 +258,43 @@ export default function BulkPolicyPage() {
         <p className="text-sm text-gray-500">Configure a policy bundle and push it to multiple devices at once</p>
       </div>
 
-      {/* Step indicator */}
+      {/* Step indicator — full on tablet/desktop, compact progress on mobile */}
       {step < 4 && (
-        <div className="flex items-center">
-          {STEPS.map((label, i) => (
-            <div key={label} className="flex items-center">
-              <div className="flex items-center gap-2 px-3 py-2">
-                <span className={`inline-flex w-5 h-5 rounded-full text-[11px] font-bold items-center justify-center shrink-0 ${
-                  step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
-                }`}>
-                  {step > i + 1 ? '✓' : i + 1}
-                </span>
-                <span className={`text-sm font-medium ${step === i + 1 ? 'text-gray-900' : 'text-gray-400'}`}>{label}</span>
+        <>
+          <div className="hidden sm:flex items-center">
+            {STEPS.map((label, i) => (
+              <div key={label} className="flex items-center">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className={`inline-flex w-5 h-5 rounded-full text-[11px] font-bold items-center justify-center shrink-0 ${
+                    step > i + 1 ? 'bg-green-500 text-white' : step === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
+                  }`}>
+                    {step > i + 1 ? '✓' : i + 1}
+                  </span>
+                  <span className={`text-sm font-medium ${step === i + 1 ? 'text-gray-900' : 'text-gray-400'}`}>{label}</span>
+                </div>
+                {i < STEPS.length - 1 && <ChevronRight size={14} className="text-gray-300 mx-1" />}
               </div>
-              {i < STEPS.length - 1 && <ChevronRight size={14} className="text-gray-300 mx-1" />}
+            ))}
+          </div>
+
+          <div className="sm:hidden flex items-center gap-2.5">
+            <span className="inline-flex w-6 h-6 rounded-full text-xs font-bold items-center justify-center shrink-0 bg-blue-600 text-white">
+              {step}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{STEPS[step - 1]}</p>
+              <div className="flex gap-1 mt-1">
+                {STEPS.map((label, i) => (
+                  <span
+                    key={label}
+                    className={`h-1 flex-1 rounded-full ${i + 1 <= step ? 'bg-blue-600' : 'bg-gray-200'}`}
+                  />
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+            <span className="text-xs text-gray-400 shrink-0">{step} / {STEPS.length}</span>
+          </div>
+        </>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -647,7 +424,7 @@ export default function BulkPolicyPage() {
 
                       {/* Parameter fields — indented under icon */}
                       {s.enabled && showParams && def.params && (
-                        <div className="mt-3 ml-[3.75rem] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="mt-3 ml-10 sm:ml-[3.75rem] grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {def.params.map((p) => (
                             <div key={p.key}>
                               <label className="block text-xs font-medium text-gray-600 mb-1">{p.label}</label>
@@ -794,8 +571,47 @@ export default function BulkPolicyPage() {
               </div>
             </div>
 
-            {/* Device table */}
-            <div className="overflow-x-auto">
+            {/* Device list — mobile cards */}
+            <div className="md:hidden divide-y divide-gray-50">
+              {devices.length === 0 ? (
+                <p className="text-center py-10 text-sm text-gray-400">No devices match your filters</p>
+              ) : (
+                devices.map((d) => (
+                  <div
+                    key={d.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleDevice(d.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') toggleDevice(d.id); }}
+                    className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                      selected.has(d.id) ? 'bg-blue-50' : 'active:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(d.id)}
+                      onChange={() => toggleDevice(d.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-4 h-4 accent-blue-600 cursor-pointer mt-1 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-gray-900 leading-tight truncate">{d.deviceIdentifier}</p>
+                        <LiveStatusBadge lastSeen={d.lastSeen} />
+                      </div>
+                      <p className="text-xs text-gray-400">{d.model} · {d.androidVersion}</p>
+                      <div className="flex items-center justify-between gap-2 mt-1.5">
+                        <p className="text-xs text-gray-500 truncate">{d.assignedUserName ?? 'Unassigned'}</p>
+                        <ComplianceBadge status={d.complianceStatus} />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Device table — tablet/desktop */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/70">
@@ -856,26 +672,24 @@ export default function BulkPolicyPage() {
           </div>
 
           {/* Step 2 footer */}
-          <div className="flex items-center justify-between bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
             <button
               onClick={() => setStep(1)}
               className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
             >
               <ChevronLeft size={14} /> Back
             </button>
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-gray-500">
-                <span className="font-semibold text-gray-800">{selected.size}</span>{' '}
-                device{selected.size !== 1 ? 's' : ''} selected
-              </p>
-              <button
-                onClick={() => setStep(3)}
-                disabled={selected.size === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Review & Deploy <ChevronRight size={14} />
-              </button>
-            </div>
+            <p className="text-sm text-gray-500 order-1 sm:order-none w-full sm:w-auto text-center sm:text-left">
+              <span className="font-semibold text-gray-800">{selected.size}</span>{' '}
+              device{selected.size !== 1 ? 's' : ''} selected
+            </p>
+            <button
+              onClick={() => setStep(3)}
+              disabled={selected.size === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Review & Deploy <ChevronRight size={14} />
+            </button>
           </div>
         </>
       )}
@@ -890,7 +704,7 @@ export default function BulkPolicyPage() {
             {/* Stats */}
             <div className="px-5 py-5">
               <h2 className="text-sm font-semibold text-gray-700 mb-4">Deployment Summary</h2>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="text-center p-4 bg-blue-50 rounded-xl">
                   <p className="text-2xl font-bold text-blue-700">{enabledCommands.length}</p>
                   <p className="text-xs text-blue-500 mt-0.5">Commands</p>

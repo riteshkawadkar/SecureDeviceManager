@@ -210,8 +210,47 @@ export default function RemoteActionsPage() {
           </div>
         </div>
 
-        {/* Device table */}
-        <div className="overflow-x-auto">
+        {/* Device list — mobile cards */}
+        <div className="md:hidden divide-y divide-gray-50">
+          {devices.length === 0 ? (
+            <p className="text-center py-10 text-sm text-gray-400">No devices match your filters</p>
+          ) : (
+            devices.map((d) => (
+              <div
+                key={d.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleDevice(d.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter') toggleDevice(d.id); }}
+                className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                  selected.has(d.id) ? 'bg-blue-50' : 'active:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(d.id)}
+                  onChange={() => toggleDevice(d.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-4 h-4 accent-blue-600 cursor-pointer mt-1 shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-gray-900 leading-tight truncate">{d.deviceIdentifier}</p>
+                    <LiveStatusBadge lastSeen={d.lastSeen} />
+                  </div>
+                  <p className="text-xs text-gray-400">{d.model} · {d.androidVersion}</p>
+                  <div className="flex items-center justify-between gap-2 mt-1.5">
+                    <p className="text-xs text-gray-500 truncate">{d.assignedUserName ?? 'Unassigned'}</p>
+                    <ComplianceBadge status={d.complianceStatus} />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Device table — tablet/desktop */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/70">
@@ -313,14 +352,17 @@ export default function RemoteActionsPage() {
 
       {/* ── Sticky Execute Bar ───────────────────────────────────────────────────── */}
       {selected.size > 0 && (
-        <div className="fixed bottom-6 inset-x-0 flex justify-center z-50 px-6 pointer-events-none">
-          <div className="bg-gray-900 rounded-2xl px-5 py-3.5 shadow-2xl flex items-center gap-3 pointer-events-auto max-w-2xl w-full">
+        <div className="fixed bottom-4 sm:bottom-6 inset-x-0 flex justify-center z-50 px-3 sm:px-6 pointer-events-none">
+          <div className="bg-gray-900 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 shadow-2xl flex items-center gap-2 sm:gap-3 pointer-events-auto max-w-2xl w-full">
             <div className="flex items-center gap-2 text-white text-sm flex-1 min-w-0">
               <span className="font-semibold truncate">{actionLabel}</span>
-              <span className="text-gray-400 text-xs shrink-0">
+              <span className="text-gray-400 text-xs shrink-0 hidden sm:inline">
                 on {selected.size} device{selected.size > 1 ? 's' : ''}
               </span>
-              <div className="flex gap-1 ml-1 overflow-hidden">
+              <span className="text-gray-400 text-xs shrink-0 sm:hidden">
+                ×{selected.size}
+              </span>
+              <div className="hidden sm:flex gap-1 ml-1 overflow-hidden">
                 {selectedDevices.slice(0, 3).map((d) => (
                   <span
                     key={d.id}
@@ -336,14 +378,14 @@ export default function RemoteActionsPage() {
             </div>
             <button
               onClick={() => setSelected(new Set())}
-              className="px-3 py-1.5 border border-gray-600 text-gray-300 text-xs rounded-lg hover:bg-gray-800 transition-colors shrink-0"
+              className="px-2.5 sm:px-3 py-1.5 border border-gray-600 text-gray-300 text-xs rounded-lg hover:bg-gray-800 transition-colors shrink-0"
             >
               Cancel
             </button>
             <button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending}
-              className="px-4 py-1.5 bg-white text-gray-900 text-sm font-bold rounded-lg hover:bg-gray-100 disabled:opacity-60 transition-colors shrink-0"
+              className="px-3 sm:px-4 py-1.5 bg-white text-gray-900 text-sm font-bold rounded-lg hover:bg-gray-100 disabled:opacity-60 transition-colors shrink-0"
             >
               {mutation.isPending ? 'Sending…' : 'Execute'}
             </button>

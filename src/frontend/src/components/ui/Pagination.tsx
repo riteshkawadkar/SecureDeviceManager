@@ -27,29 +27,41 @@ export default function Pagination({ page, pageSize, total, onChange }: Props) {
       <button
         onClick={() => onChange(page - 1)}
         disabled={page === 1}
-        className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        aria-label="Previous page"
+        className="p-2 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
       >
         <ChevronLeft size={16} />
       </button>
-      {pages.map((p, i) =>
-        p === '...' ? (
-          <span key={`e${i}`} className="px-2 text-gray-400">...</span>
-        ) : (
-          <button
-            key={p}
-            onClick={() => onChange(p as number)}
-            className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
-              p === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'
-            }`}
-          >
-            {p}
-          </button>
-        )
-      )}
+
+      {/* Numbered pages — hidden on mobile to avoid overflow */}
+      <div className="hidden sm:flex items-center gap-1">
+        {pages.map((p, i) =>
+          p === '...' ? (
+            <span key={`e${i}`} className="px-2 text-gray-400">...</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p as number)}
+              className={`w-9 h-9 sm:w-8 sm:h-8 rounded text-sm font-medium transition-colors ${
+                p === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+      </div>
+
+      {/* Compact page indicator — mobile only */}
+      <span className="sm:hidden px-2 text-sm font-medium text-gray-600 whitespace-nowrap">
+        {page} / {totalPages}
+      </span>
+
       <button
         onClick={() => onChange(page + 1)}
         disabled={page === totalPages}
-        className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        aria-label="Next page"
+        className="p-2 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
       >
         <ChevronRight size={16} />
       </button>

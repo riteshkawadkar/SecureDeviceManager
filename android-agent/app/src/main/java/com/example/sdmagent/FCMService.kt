@@ -355,6 +355,22 @@ class FCMService : FirebaseMessagingService() {
                     }
                 }
 
+                // ── Generic Android user restriction (UserManager.DISALLOW_*) ──
+                // restriction = raw UserManager key, e.g. "no_camera", "no_factory_reset"
+                // enabled = "true" to apply the restriction, "false" to lift it
+                "SetUserRestriction" -> {
+                    val restriction = data["restriction"]
+                    val enabled = data["enabled"]?.toBoolean() ?: true
+                    if (restriction != null && isDeviceOwner) {
+                        if (enabled) dpm.addUserRestriction(adminComponent, restriction)
+                        else dpm.clearUserRestriction(adminComponent, restriction)
+                        Log.d(TAG, "User restriction ${if (enabled) "applied" else "lifted"}: $restriction")
+                        success = true
+                    } else {
+                        Log.w(TAG, "SetUserRestriction requires Device Owner and a restriction key. restriction=$restriction")
+                    }
+                }
+
                 else -> Log.w(TAG, "Unknown command: $command")
             }
         } catch (e: SecurityException) {

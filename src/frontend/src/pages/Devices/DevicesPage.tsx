@@ -122,7 +122,7 @@ export default function DevicesPage() {
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder="Search by name, model..."
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-56"
+          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-56"
         />
       </div>
 
@@ -151,8 +151,65 @@ export default function DevicesPage() {
         </span>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Mobile card list */}
+      <div className="md:hidden bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="divide-y divide-gray-50">
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 text-gray-400 py-12">
+            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+            Loading devices...
+          </div>
+        ) : devices.length === 0 ? (
+          <p className="text-center py-12 text-sm text-gray-400">No devices found</p>
+        ) : devices.map((device) => (
+          <div
+            key={device.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate(`/devices/${device.id}`)}
+            onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/devices/${device.id}`); }}
+            className="flex items-start gap-3 px-4 py-3 active:bg-gray-50"
+          >
+            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+              <span className="text-xs text-blue-600 font-bold">A</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-gray-900 leading-tight truncate">{device.deviceIdentifier}</p>
+                <button
+                  data-action-menu={device.id}
+                  onClick={(e) => { e.stopPropagation(); openMenu(device.id, e); }}
+                  aria-label="Device actions"
+                  className={`p-2 rounded-md shrink-0 -mr-1 touch-manipulation ${openMenuId === device.id ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
+                >
+                  <MoreHorizontal size={15} className="text-gray-400" />
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 leading-tight">{device.model} · {device.androidVersion}</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <LiveStatusBadge lastSeen={device.lastSeen} />
+                <ComplianceBadge status={device.complianceStatus} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                {device.assignedUserName ?? 'Unassigned'} · seen {formatRelativeTime(device.lastSeen)}
+              </p>
+            </div>
+          </div>
+        ))}
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+          <p className="text-xs text-gray-500">
+            {total === 0
+              ? 'No results'
+              : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+          </p>
+          <Pagination page={page} pageSize={pageSize} total={total} onChange={setPage} />
+        </div>
+      </div>
+
+      {/* Table — tablet/desktop */}
+      <div className="hidden md:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
