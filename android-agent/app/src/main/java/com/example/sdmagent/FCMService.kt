@@ -214,6 +214,20 @@ class FCMService : FirebaseMessagingService() {
                     }
                 }
 
+                "UninstallApp", "uninstall-app" -> {
+                    val pkg = data["packageName"]
+                    if (pkg != null) {
+                        // PackageInstaller's uninstall callback (InstallReceiver) doesn't carry the
+                        // commandId, so we report success once the request is accepted by the
+                        // system rather than waiting on that broadcast.
+                        PackageInstallerHelper.uninstallPackage(this, pkg)
+                        Log.d(TAG, "Uninstall requested: $pkg")
+                        success = true
+                    } else {
+                        Log.w(TAG, "UninstallApp missing packageName")
+                    }
+                }
+
                 // ── App installation control ─────────────────────────────────
                 "DisableAppInstall" -> {
                     if (isDeviceOwner) {

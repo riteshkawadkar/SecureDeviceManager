@@ -43,6 +43,8 @@ builder.Services.AddScoped<IDashboardService, SDM.Infrastructure.Services.Dashbo
 builder.Services.AddScoped<IPolicyService, SDM.Infrastructure.Services.PolicyService>();
 builder.Services.AddScoped<IDeviceGroupService, SDM.Infrastructure.Services.DeviceGroupService>();
 builder.Services.AddScoped<IAppService, SDM.Infrastructure.Services.AppService>();
+builder.Services.AddScoped<IAppPackageService, SDM.Infrastructure.Services.AppPackageService>();
+builder.Services.AddScoped<IDeviceInventoryService, SDM.Infrastructure.Services.DeviceInventoryService>();
 builder.Services.AddScoped<IAuditLogService, SDM.Infrastructure.Services.AuditLogService>();
 builder.Services.AddScoped<IViolationService, SDM.Infrastructure.Services.ViolationService>();
 

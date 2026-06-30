@@ -82,6 +82,16 @@ data class ReportStatusRequest(val success: Boolean)
 
 data class HeartbeatRequest(val battery: Int, val freeStorage: Long)
 
+data class InstalledAppItem(
+    val packageId: String,
+    val appName: String?,
+    val versionName: String?,
+    val versionCode: Int?,
+    val isSystemApp: Boolean
+)
+
+data class ReportInstalledAppsRequest(val apps: List<InstalledAppItem>)
+
 // ── API interface ──────────────────────────────────────────────────────────────
 
 interface ApiService {
@@ -114,6 +124,13 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Path("deviceId") deviceId: String,
         @Body req: HeartbeatRequest
+    ): Response<Unit>
+
+    @POST("api/devices/{deviceId}/installed-apps")
+    suspend fun reportInstalledApps(
+        @Header("Authorization") auth: String,
+        @Path("deviceId") deviceId: String,
+        @Body req: ReportInstalledAppsRequest
     ): Response<Unit>
 
     @retrofit2.http.DELETE("api/devices/{deviceId}")
@@ -506,7 +523,14 @@ class MainActivity : AppCompatActivity() {
                 .setConstraints(networkConstraint)
                 .build()
         )
-        Log.d("MainActivity", "Background workers scheduled (heartbeat + policy sync)")
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "sdm_app_inventory",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<AppInventoryWorker>(6, TimeUnit.HOURS)
+                .setConstraints(networkConstraint)
+                .build()
+        )
+        Log.d("MainActivity", "Background workers scheduled (heartbeat + policy sync + app inventory)")
     }
 
     private fun performUnenroll() {
@@ -541,6 +565,7 @@ class MainActivity : AppCompatActivity() {
 
             WorkManager.getInstance(this@MainActivity).cancelUniqueWork("sdm_heartbeat")
             WorkManager.getInstance(this@MainActivity).cancelUniqueWork("sdm_policy_sync")
+            WorkManager.getInstance(this@MainActivity).cancelUniqueWork("sdm_app_inventory")
             prefs.edit().clear().apply()
 
             refreshEnrollmentStatus()

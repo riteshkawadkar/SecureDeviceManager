@@ -11,6 +11,24 @@ import java.io.InputStream
 
 object PackageInstallerHelper {
 
+    fun uninstallPackage(context: Context, packageName: String) {
+        val packageInstaller = context.packageManager.packageInstaller
+        try {
+            val intent = Intent(context, InstallReceiver::class.java)
+            intent.action = "com.example.sdmagent.UNINSTALL_COMPLETE"
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                packageName.hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            packageInstaller.uninstall(packageName, pendingIntent.intentSender)
+            Log.d("PackageInstaller", "Uninstall requested for $packageName")
+        } catch (e: Exception) {
+            Log.e("PackageInstaller", "Error uninstalling package $packageName", e)
+        }
+    }
+
     fun installPackage(context: Context, apkFile: File, packageName: String) {
         val packageInstaller = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)

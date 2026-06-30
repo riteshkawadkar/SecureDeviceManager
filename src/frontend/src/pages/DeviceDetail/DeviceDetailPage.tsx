@@ -4,9 +4,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Lock, Trash2, RotateCw, Bell, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck,
-  ChevronDown, ChevronRight, History, Layers, Zap,
+  ChevronDown, ChevronRight, History, Layers, Zap, AppWindow,
 } from 'lucide-react';
 import { getDevice, listViolations, listCommands, sendCommand } from '../../api/devices';
+import { getDeviceInstalledApps } from '../../api/appPackages';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
@@ -169,6 +170,11 @@ export default function DeviceDetailPage() {
     queryFn: () => listCommands(id!),
     refetchInterval: 30_000,
   });
+  const { data: installedAppsData } = useQuery({
+    queryKey: ['device-installed-apps', id],
+    queryFn: () => getDeviceInstalledApps(id!),
+  });
+  const installedApps = installedAppsData?.items ?? [];
 
   // Latest known command per policy — used both for the "currently applied" card (filtered
   // below to active restrictions only) and the full Policy History table (every policy ever
@@ -522,6 +528,29 @@ export default function DeviceDetailPage() {
                     <p className="text-xs text-gray-700">{v.description}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{formatRelativeTime(v.createdOn)}</p>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Installed Apps — inventory reported by the device agent */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <AppWindow size={14} className="text-gray-400" /> Installed Apps
+              </h3>
+              {installedApps.length > 0 && <span className="text-xs text-gray-400">{installedApps.length} apps</span>}
+            </div>
+            <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+              {installedApps.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No app inventory reported by this device yet</p>
+              ) : installedApps.map((app) => (
+                <div key={app.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-800 truncate">{app.appName ?? app.packageId}</p>
+                    <p className="text-xs text-gray-400 font-mono truncate">{app.packageId}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">{app.versionName ?? '—'}</span>
                 </div>
               ))}
             </div>

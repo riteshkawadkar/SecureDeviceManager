@@ -33,6 +33,12 @@ namespace SDM.Infrastructure.Data
 
         public DbSet<SDM.Domain.Entities.AppEntry> Apps => Set<SDM.Domain.Entities.AppEntry>();
 
+        public DbSet<SDM.Domain.Entities.AppPackage> AppPackages => Set<SDM.Domain.Entities.AppPackage>();
+
+        public DbSet<SDM.Domain.Entities.AppInstallation> AppInstallations => Set<SDM.Domain.Entities.AppInstallation>();
+
+        public DbSet<SDM.Domain.Entities.DeviceInstalledApp> DeviceInstalledApps => Set<SDM.Domain.Entities.DeviceInstalledApp>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -104,6 +110,39 @@ namespace SDM.Infrastructure.Data
                 .WithMany(d => d.Violations)
                 .HasForeignKey(v => v.DeviceId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // App catalog / push-install relationships
+            modelBuilder.Entity<SDM.Domain.Entities.AppPackage>()
+                .HasIndex(a => a.PackageId);
+
+            modelBuilder.Entity<SDM.Domain.Entities.AppInstallation>()
+                .HasOne(i => i.AppPackage)
+                .WithMany(a => a.Installations)
+                .HasForeignKey(i => i.AppPackageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SDM.Domain.Entities.AppInstallation>()
+                .HasOne(i => i.Device)
+                .WithMany()
+                .HasForeignKey(i => i.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SDM.Domain.Entities.AppInstallation>()
+                .HasOne(i => i.Command)
+                .WithMany()
+                .HasForeignKey(i => i.CommandId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Installed-app inventory
+            modelBuilder.Entity<SDM.Domain.Entities.DeviceInstalledApp>()
+                .HasOne(d => d.Device)
+                .WithMany()
+                .HasForeignKey(d => d.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SDM.Domain.Entities.DeviceInstalledApp>()
+                .HasIndex(d => new { d.DeviceId, d.PackageId })
+                .IsUnique();
 
             // Seed predefined policies
             modelBuilder.Entity<SDM.Domain.Entities.Policy>().HasData(

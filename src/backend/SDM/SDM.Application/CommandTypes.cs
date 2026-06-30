@@ -26,6 +26,9 @@ namespace SDM.Application
         /// <summary>[Device Owner] Sideload an APK. Payload: {"packageName":"com.example.app","url":"https://…/app.apk"}</summary>
         public const string InstallApp = "InstallApp";
 
+        /// <summary>[Device Owner] Uninstall an app. Payload: {"packageName":"com.example.app"}</summary>
+        public const string UninstallApp = "UninstallApp";
+
         // ── App installation control ───────────────────────────────────────────
         /// <summary>[Device Owner] Block all app installations by the user. Payload: (none)</summary>
         public const string DisableAppInstall = "DisableAppInstall";
