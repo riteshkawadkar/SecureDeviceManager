@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Smartphone, Shield, Zap, AppWindow,
+  LayoutDashboard, Smartphone, Shield, AppWindow,
   FileBarChart, Settings, HelpCircle, LogOut, Layers, X, Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -13,7 +13,6 @@ const navItems = [
       { to: '/devices', icon: Smartphone, label: 'Devices' },
       { to: '/policies', icon: Shield, label: 'Policies' },
       { to: '/bulk-policies', icon: Layers, label: 'Bulk Deploy' },
-      { to: '/remote-actions', icon: Zap, label: 'Remote Actions' },
       { to: '/app-management', icon: AppWindow, label: 'App Management' },
       { to: '/reports', icon: FileBarChart, label: 'Reports' },
     ],

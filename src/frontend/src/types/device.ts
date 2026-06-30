@@ -59,3 +59,14 @@ export interface PagedResult<T> {
   page: number;
   pageSize: number;
 }
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  entityName: string;
+  entityId: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  timestamp: string;
+}

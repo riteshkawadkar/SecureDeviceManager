@@ -13,11 +13,13 @@ namespace SDM.API.Controllers
     {
         private readonly IDeviceService _deviceService;
         private readonly IViolationService _violationService;
+        private readonly IAuditLogService _auditLogService;
 
-        public DevicesController(IDeviceService deviceService, IViolationService violationService)
+        public DevicesController(IDeviceService deviceService, IViolationService violationService, IAuditLogService auditLogService)
         {
             _deviceService = deviceService;
             _violationService = violationService;
+            _auditLogService = auditLogService;
         }
 
         [AllowAnonymous]
@@ -109,6 +111,14 @@ namespace SDM.API.Controllers
         {
             var commands = await _deviceService.GetCommandsByDeviceAsync(id);
             return Ok(commands);
+        }
+
+        [Authorize(Roles = Roles.AllRoles)]
+        [HttpGet("{id:guid}/audit-logs")]
+        public async Task<IActionResult> GetAuditLogs([FromRoute] Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            var result = await _auditLogService.GetByDeviceAsync(id, page, pageSize);
+            return Ok(result);
         }
 
         [Authorize(Roles = Roles.AllRoles)]

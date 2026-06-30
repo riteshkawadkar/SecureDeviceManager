@@ -1,9 +1,15 @@
-import { useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Lock, Trash2, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck } from 'lucide-react';
-import { getDevice, listViolations, listCommands, sendCommand } from '../../api/devices';
+import {
+  Lock, Trash2, RotateCw, Bell, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck,
+  ChevronDown, ChevronRight, History, ScrollText,
+} from 'lucide-react';
+import { getDevice, listViolations, listCommands, listDeviceAuditLogs, sendCommand } from '../../api/devices';
 import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
+import Modal from '../../components/ui/Modal';
+import Pagination from '../../components/ui/Pagination';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection, getIncompatiblePolicies } from '../../data/policyDefs';
 import type { DeviceCommand } from '../../types/device';
@@ -15,7 +21,17 @@ const COMMAND_STATUS_BADGE: Record<number, { label: string; cls: string }> = {
   3: { label: 'Failed', cls: 'bg-red-100 text-red-600' },
 };
 
+const DEVICE_COMMANDS = [
+  { type: 'LockDevice', label: 'Remote Lock', desc: 'Instantly lock device screen', icon: Lock },
+  { type: 'Reboot', label: 'Force Reboot', desc: 'Restart device remotely', icon: RotateCw },
+  { type: 'SendAlert', label: 'Send Alert', desc: 'Push a message to the device screen', icon: Bell },
+  { type: 'WipeData', label: 'Remote Wipe', desc: 'Full factory reset — irreversible', icon: Trash2 },
+];
+
+const AUDIT_PAGE_SIZE = 10;
+
 type AppliedPolicy = { def: typeof POLICY_DEFS[number]; latest: DeviceCommand; restrictive: boolean };
+type PolicyHistoryEntry = { def: typeof POLICY_DEFS[number]; cmd: DeviceCommand; restrictive: boolean };
 
 function parsePayload(payload: string): unknown {
   try { return JSON.parse(payload); } catch { return payload; }
@@ -40,10 +56,46 @@ function buildAppliedPolicies(commands: DeviceCommand[] | undefined): AppliedPol
   return result;
 }
 
+/** Full reverse-chronological history of every policy-related command, not just the latest per policy. */
+function buildPolicyHistory(commands: DeviceCommand[] | undefined): PolicyHistoryEntry[] {
+  const entries: PolicyHistoryEntry[] = [];
+  for (const cmd of commands ?? []) {
+    const def = findPolicyDefForCommand(cmd.commandType, parsePayload(cmd.payload));
+    if (!def) continue;
+    entries.push({ def, cmd, restrictive: isRestrictiveDirection(def, cmd.commandType, parsePayload(cmd.payload)) });
+  }
+  return entries.sort((a, b) => new Date(b.cmd.createdOn).getTime() - new Date(a.cmd.createdOn).getTime());
+}
+
+function commandPayloadPreview(payload: string): string {
+  try {
+    const parsed = JSON.parse(payload);
+    return parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0 ? JSON.stringify(parsed) : '';
+  } catch {
+    return payload;
+  }
+}
+
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsMenuPos, setActionsMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
+  const [logsTab, setLogsTab] = useState<'commands' | 'audit'>('commands');
+  const [auditPage, setAuditPage] = useState(1);
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (!(e.target as Element).closest('[data-actions-menu]')) setActionsOpen(false);
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, []);
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', id],
@@ -60,8 +112,18 @@ export default function DeviceDetailPage() {
     queryFn: () => listCommands(id!),
     refetchInterval: 30_000,
   });
+  const { data: auditLogs } = useQuery({
+    queryKey: ['device-audit-logs', id, auditPage],
+    queryFn: () => listDeviceAuditLogs(id!, auditPage, AUDIT_PAGE_SIZE),
+    enabled: logsTab === 'audit',
+  });
 
   const appliedPolicies = useMemo(() => buildAppliedPolicies(commands), [commands]);
+  const policyHistory = useMemo(() => buildPolicyHistory(commands), [commands]);
+  const commandLog = useMemo(
+    () => [...(commands ?? [])].sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime()),
+    [commands],
+  );
 
   // Of the policies actually applied to this device, which ones won't get their full effect
   // on its reported Android version (e.g. Wi-Fi Toggle on Android 9 only blocks config
@@ -73,9 +135,38 @@ export default function DeviceDetailPage() {
   }, [appliedPolicies, device?.androidVersion]);
 
   const cmdMutation = useMutation({
-    mutationFn: ({ type }: { type: string }) => sendCommand(id!, type),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['device', id] }),
+    mutationFn: ({ type, payload }: { type: string; payload?: object }) => sendCommand(id!, type, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['device', id] });
+      qc.invalidateQueries({ queryKey: ['commands', id] });
+    },
   });
+
+  function openActionsMenu(e: React.MouseEvent<HTMLButtonElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setActionsMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    setActionsOpen((v) => !v);
+  }
+
+  function runAction(type: string) {
+    setActionsOpen(false);
+    if (type === 'WipeData') {
+      if (confirm('Wipe this device? This cannot be undone.')) cmdMutation.mutate({ type });
+      return;
+    }
+    if (type === 'SendAlert') {
+      setAlertMessage('');
+      setAlertModalOpen(true);
+      return;
+    }
+    cmdMutation.mutate({ type });
+  }
+
+  function sendAlert() {
+    if (!alertMessage.trim()) return;
+    cmdMutation.mutate({ type: 'SendAlert', payload: { message: alertMessage.trim() } });
+    setAlertModalOpen(false);
+  }
 
   if (isLoading) {
     return (
@@ -129,27 +220,80 @@ export default function DeviceDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="shrink-0">
           <button
-            onClick={() => cmdMutation.mutate({ type: 'LockScreen' })}
+            data-actions-menu
+            onClick={openActionsMenu}
             disabled={cmdMutation.isPending}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-60"
           >
-            <Lock size={14} /> Lock
-          </button>
-          <button
-            disabled={cmdMutation.isPending}
-            onClick={() => {
-              if (confirm('Wipe this device? This cannot be undone.')) {
-                cmdMutation.mutate({ type: 'WipeData' });
-              }
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
-          >
-            <Trash2 size={14} /> Wipe
+            <ShieldCheck size={14} /> Actions
+            <ChevronDown size={14} className={`transition-transform ${actionsOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </div>
+
+      {/* Actions dropdown — portaled so it floats above everything */}
+      {actionsOpen && actionsMenuPos && createPortal(
+        <div
+          data-actions-menu
+          style={{ position: 'fixed', top: actionsMenuPos.top, right: actionsMenuPos.right, zIndex: 9999 }}
+          className="w-64 bg-white rounded-xl border border-gray-100 shadow-xl py-1.5"
+        >
+          {DEVICE_COMMANDS.map((cmd) => {
+            const Icon = cmd.icon;
+            const danger = cmd.type === 'WipeData';
+            return (
+              <button
+                key={cmd.type}
+                onClick={() => runAction(cmd.type)}
+                className={`w-full flex items-start gap-3 px-3.5 py-2.5 text-left transition-colors ${
+                  danger ? 'hover:bg-red-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <Icon size={15} className={`mt-0.5 shrink-0 ${danger ? 'text-red-500' : 'text-gray-400'}`} />
+                <span className="min-w-0">
+                  <span className={`block text-sm font-medium ${danger ? 'text-red-600' : 'text-gray-800'}`}>{cmd.label}</span>
+                  <span className="block text-xs text-gray-400">{cmd.desc}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+
+      {/* Send Alert modal */}
+      {alertModalOpen && (
+        <Modal title="Send Alert to Device" onClose={() => setAlertModalOpen(false)}>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">This message is pushed to the device screen immediately.</p>
+            <textarea
+              autoFocus
+              rows={3}
+              value={alertMessage}
+              onChange={(e) => setAlertMessage(e.target.value)}
+              placeholder="e.g. Please return this device to IT by Friday"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setAlertModalOpen(false)}
+                className="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendAlert}
+                disabled={!alertMessage.trim() || cmdMutation.isPending}
+                className="px-3.5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Device Info */}
@@ -254,6 +398,159 @@ export default function DeviceDetailPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Policy History — full reverse-chronological timeline, vs. the latest-only Applied Policies card above */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <History size={14} className="text-gray-400" /> Policy History
+          </h3>
+          {policyHistory.length > 0 && <span className="text-xs text-gray-400">{policyHistory.length} events</span>}
+        </div>
+        <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+          {policyHistory.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6">No policy commands have been sent to this device yet</p>
+          ) : (
+            policyHistory.map(({ def, cmd, restrictive }) => {
+              const Icon = def.icon;
+              const directionLabel = restrictive
+                ? def.restrictionLabels?.restrict ?? def.binaryAction?.trueLabel ?? 'Applied'
+                : def.restrictionLabels?.lift ?? def.binaryAction?.falseLabel ?? 'Lifted';
+              const statusBadge = COMMAND_STATUS_BADGE[cmd.status] ?? COMMAND_STATUS_BADGE[0];
+              return (
+                <div key={cmd.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon size={15} className="text-gray-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-700 truncate">{def.label}</p>
+                      <p className="text-xs text-gray-400" title={formatDate(cmd.createdOn)}>
+                        {formatRelativeTime(cmd.executedOn ?? cmd.createdOn)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`text-xs font-semibold ${restrictive ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {directionLabel}
+                    </span>
+                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium ${statusBadge.cls}`}>
+                      {statusBadge.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Logs — Command Log (full command history) + Audit Log (device lifecycle + command-creation events) */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <ScrollText size={14} className="text-gray-400" /> Logs
+          </h3>
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setLogsTab('commands')}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                logsTab === 'commands' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Command Log
+            </button>
+            <button
+              onClick={() => setLogsTab('audit')}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                logsTab === 'audit' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Audit Log
+            </button>
+          </div>
+        </div>
+
+        {logsTab === 'commands' ? (
+          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+            {commandLog.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No commands sent to this device yet</p>
+            ) : (
+              commandLog.map((cmd) => {
+                const statusBadge = COMMAND_STATUS_BADGE[cmd.status] ?? COMMAND_STATUS_BADGE[0];
+                const payloadPreview = commandPayloadPreview(cmd.payload);
+                return (
+                  <div key={cmd.id} className="flex items-start justify-between gap-3 px-5 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{cmd.commandType}</p>
+                      {payloadPreview && (
+                        <p className="text-xs text-gray-400 font-mono truncate max-w-md">{payloadPreview}</p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {formatDate(cmd.createdOn)} · {cmd.retryCount > 0 ? `${cmd.retryCount} retr${cmd.retryCount > 1 ? 'ies' : 'y'}` : 'no retries'}
+                      </p>
+                    </div>
+                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0 ${statusBadge.cls}`}>
+                      {statusBadge.label}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+              {(auditLogs?.items.length ?? 0) === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">No audit events recorded for this device yet</p>
+              ) : (
+                auditLogs!.items.map((log) => {
+                  const hasDetails = !!(log.oldValue || log.newValue);
+                  const expanded = expandedAuditId === log.id;
+                  return (
+                    <div key={log.id} className="px-5 py-2.5">
+                      <button
+                        onClick={() => hasDetails && setExpandedAuditId(expanded ? null : log.id)}
+                        className={`w-full flex items-center justify-between gap-3 text-left ${hasDetails ? 'cursor-pointer' : 'cursor-default'}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {hasDetails && (
+                            <ChevronRight size={12} className={`text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">{log.action}</p>
+                            <p className="text-xs text-gray-400">{log.entityName}</p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-400 shrink-0">{formatDate(log.timestamp)}</p>
+                      </button>
+                      {expanded && hasDetails && (
+                        <div className="mt-2 ml-4 space-y-1.5">
+                          {log.oldValue && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase">Before</p>
+                              <pre className="text-[11px] text-gray-600 bg-gray-50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all">{log.oldValue}</pre>
+                            </div>
+                          )}
+                          {log.newValue && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase">After</p>
+                              <pre className="text-[11px] text-gray-600 bg-gray-50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all">{log.newValue}</pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {auditLogs && auditLogs.total > AUDIT_PAGE_SIZE && (
+              <div className="flex justify-center px-5 py-3 border-t border-gray-100">
+                <Pagination page={auditPage} pageSize={AUDIT_PAGE_SIZE} total={auditLogs.total} onChange={setAuditPage} />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
