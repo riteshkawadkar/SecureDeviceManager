@@ -43,6 +43,10 @@ services:
       DB_PORT: 5432
       DB_USER: sdm_user
       Firebase__ServiceAccountPath: /app/firebase-sa.json
+      GoogleEnterprise__ServiceAccountPath: /app/google-enterprise-sa.json
+      GoogleEnterprise__ProjectId: sdm-android-app
+      GoogleEnterprise__CallbackUrl: http://40.81.231.1:5254/api/enterprise/callback
+      GoogleEnterprise__FrontendRedirectUrl: http://40.81.231.1:3000/settings
     ports:
       - "5254:5254"
     depends_on:
@@ -50,6 +54,7 @@ services:
         condition: service_healthy
     volumes:
       - ./src/backend/SDM/SDM.API/firebase-sa.json:/app/firebase-sa.json
+      - ./src/backend/SDM/SDM.API/google-enterprise-sa.json:/app/google-enterprise-sa.json
 
   frontend:
     build:
