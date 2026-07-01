@@ -78,6 +78,14 @@ namespace SDM.API.Controllers
             return NoContent();
         }
 
+        [Authorize(Roles = "Device")]
+        [HttpGet("pending")]
+        public async Task<IActionResult> GetPending([FromRoute] Guid deviceId)
+        {
+            var cmds = await _commandService.GetPendingCommandsAsync(deviceId);
+            return Ok(cmds);
+        }
+
         public class ReportStatusRequest
         {
             public bool Success { get; set; }

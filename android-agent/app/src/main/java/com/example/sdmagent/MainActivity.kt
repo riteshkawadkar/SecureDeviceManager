@@ -92,6 +92,12 @@ data class InstalledAppItem(
 
 data class ReportInstalledAppsRequest(val apps: List<InstalledAppItem>)
 
+data class PendingCommandDto(
+    val id: String,
+    val commandType: String,
+    val payload: String
+)
+
 // ── API interface ──────────────────────────────────────────────────────────────
 
 interface ApiService {
@@ -138,6 +144,12 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Path("deviceId") deviceId: String
     ): Response<Unit>
+
+    @retrofit2.http.GET("api/devices/{deviceId}/commands/pending")
+    suspend fun getPendingCommands(
+        @Header("Authorization") auth: String,
+        @Path("deviceId") deviceId: String
+    ): Response<List<PendingCommandDto>>
 }
 
 // ── Activity ───────────────────────────────────────────────────────────────────
@@ -530,7 +542,14 @@ class MainActivity : AppCompatActivity() {
                 .setConstraints(networkConstraint)
                 .build()
         )
-        Log.d("MainActivity", "Background workers scheduled (heartbeat + policy sync + app inventory)")
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "sdm_command_poll",
+            ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<CommandPollingWorker>(15, TimeUnit.MINUTES)
+                .setConstraints(networkConstraint)
+                .build()
+        )
+        Log.d("MainActivity", "Background workers scheduled (heartbeat + policy sync + app inventory + command poll)")
     }
 
     private fun performUnenroll() {
@@ -566,6 +585,7 @@ class MainActivity : AppCompatActivity() {
             WorkManager.getInstance(this@MainActivity).cancelUniqueWork("sdm_heartbeat")
             WorkManager.getInstance(this@MainActivity).cancelUniqueWork("sdm_policy_sync")
             WorkManager.getInstance(this@MainActivity).cancelUniqueWork("sdm_app_inventory")
+            WorkManager.getInstance(this@MainActivity).cancelUniqueWork("sdm_command_poll")
             prefs.edit().clear().apply()
 
             refreshEnrollmentStatus()

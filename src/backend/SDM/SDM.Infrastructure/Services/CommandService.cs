@@ -139,5 +139,28 @@ namespace SDM.Infrastructure.Services
                 await _db.SaveChangesAsync();
             }
         }
+
+        public async Task<IEnumerable<DeviceCommandDto>> GetPendingCommandsAsync(Guid deviceId)
+        {
+            var cmds = await _db.DeviceCommands
+                .Where(c => c.DeviceId == deviceId
+                    && c.AcknowledgedOn == null
+                    && (c.Status == CommandStatus.Pending || c.Status == CommandStatus.Sent || c.Status == CommandStatus.Failed))
+                .OrderBy(c => c.CreatedOn)
+                .ToListAsync();
+
+            return cmds.Select(c => new DeviceCommandDto
+            {
+                Id = c.Id,
+                DeviceId = c.DeviceId,
+                CommandType = c.CommandType,
+                Payload = c.Payload,
+                Status = (int)c.Status,
+                RetryCount = c.RetryCount,
+                CreatedOn = c.CreatedOn,
+                ExecutedOn = c.ExecutedOn,
+                AcknowledgedOn = c.AcknowledgedOn
+            });
+        }
     }
 }
