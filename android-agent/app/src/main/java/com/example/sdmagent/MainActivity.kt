@@ -20,6 +20,7 @@ import androidx.security.crypto.MasterKeys
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.material.button.MaterialButton
@@ -383,6 +384,14 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshAdminStatus()
         refreshEnrollmentStatus()
+        // Poll for pending commands immediately when app is foregrounded
+        if (getPrefs().getString("device_id", null) != null) {
+            WorkManager.getInstance(this).enqueue(
+                OneTimeWorkRequestBuilder<CommandPollingWorker>()
+                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                    .build()
+            )
+        }
     }
 
     private fun displayDeviceInfo() {

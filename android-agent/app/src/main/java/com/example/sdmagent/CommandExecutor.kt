@@ -94,8 +94,24 @@ class CommandExecutor(private val context: Context) {
                 }
 
                 "WipeData", "wipe-data" -> {
-                    Log.d(TAG, "WipeData received (disabled for safety)")
-                    success = false
+                    // Report success before wipe — device process dies after wipeData()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val jwt = getSavedValue("device_jwt")
+                        val devId = getSavedValue("device_id")
+                        val baseUrl = getSavedValue("server_url") ?: determineBaseUrl()
+                        if (jwt != null && devId != null && commandId.isNotBlank()) {
+                            runCatching { buildApi(baseUrl).reportCommandStatus("Bearer $jwt", devId, commandId, ReportStatusRequest(true)) }
+                            PolicyStore.markResult(context, commandId, true)
+                        }
+                        Thread.sleep(1500)
+                        try {
+                            dpm.wipeData(0)
+                            Log.d(TAG, "WipeData initiated — device will factory reset")
+                        } catch (e: SecurityException) {
+                            Log.e(TAG, "WipeData failed (requires Device Owner or MANAGE_DEVICE_POLICY_WIPE_DATA): ${e.message}")
+                        }
+                    }
+                    return // outer reportStatus skipped — handled above
                 }
 
                 "Reboot" -> {
