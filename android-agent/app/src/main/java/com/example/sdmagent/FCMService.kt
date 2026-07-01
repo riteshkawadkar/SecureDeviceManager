@@ -32,6 +32,22 @@ class FCMService : FirebaseMessagingService() {
         if (command != null) {
             Log.d(TAG, "Processing command: $command")
             CommandExecutor(this).execute(command, remoteMessage.data)
+            // Acknowledge so the HTTP polling worker doesn't re-execute the same command
+            val commandId = remoteMessage.data["commandId"]
+                ?: try { JSONObject(remoteMessage.data["payload"] ?: "{}").optString("commandId", "") } catch (_: Exception) { "" }
+            if (!commandId.isNullOrBlank()) {
+                val jwt = getSavedValue("device_jwt")
+                val devId = getSavedValue("device_id")
+                if (jwt != null && devId != null) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        runCatching {
+                            buildApi(getSavedValue("server_url") ?: determineBaseUrl())
+                                .acknowledgeCommand("Bearer $jwt", devId, commandId)
+                        }
+                        Log.d(TAG, "FCM command acknowledged: $commandId")
+                    }
+                }
+            }
         } else {
             Log.w(TAG, "No command found in FCM data: ${remoteMessage.data}")
         }

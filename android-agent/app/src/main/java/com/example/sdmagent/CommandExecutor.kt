@@ -178,9 +178,9 @@ class CommandExecutor(private val context: Context) {
                 "UninstallApp", "uninstall-app" -> {
                     val pkg = data["packageName"]
                     if (pkg != null) {
-                        PackageInstallerHelper.uninstallPackage(context, pkg)
-                        Log.d(TAG, "Uninstall requested: $pkg")
-                        success = true
+                        success = PackageInstallerHelper.uninstallPackage(context, pkg, commandId)
+                        Log.d(TAG, "Uninstall requested: $pkg success=$success")
+                        if (success) return // status will be reported by InstallReceiver callback
                     } else {
                         Log.w(TAG, "UninstallApp missing packageName")
                     }
@@ -445,20 +445,22 @@ class CommandExecutor(private val context: Context) {
                 val response = OkHttpClient().newCall(Request.Builder().url(url).build()).execute()
                 if (!response.isSuccessful) {
                     Log.e(TAG, "APK download failed: ${response.code}")
+                    PolicyStore.markResult(context, commandId, false)
                     reportStatus(commandId, false)
                     return@launch
                 }
                 val apkFile = File(context.cacheDir, "temp.apk")
                 FileOutputStream(apkFile).use {
                     it.write(response.body?.bytes() ?: run {
+                        PolicyStore.markResult(context, commandId, false)
                         reportStatus(commandId, false)
                         return@launch
                     })
                 }
                 Log.d(TAG, "APK downloaded, starting installation")
-                PackageInstallerHelper.installPackage(context, apkFile, packageName)
-                PolicyStore.markResult(context, commandId, true)
-                reportStatus(commandId, true)
+                // Status is reported by InstallReceiver once the system confirms success/failure.
+                // installPackage() handles session-level failures immediately.
+                PackageInstallerHelper.installPackage(context, apkFile, packageName, commandId)
             } catch (e: Exception) {
                 Log.e(TAG, "Error during APK download/install", e)
                 PolicyStore.markResult(context, commandId, false)
