@@ -52,7 +52,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key "$SERVER_USER@$SERVER_HOST" "
             set -e
             cd ~/SecureDeviceManager
-            git pull origin master
+            git fetch origin master
+            git reset --hard origin/master
             docker compose down --remove-orphans
             docker container rm -f sdm-postgres sdm-api sdm-pgadmin sdm-frontend 2>/dev/null || true
             docker compose build --no-cache api frontend

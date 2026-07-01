@@ -50,6 +50,7 @@ services:
         condition: service_healthy
     volumes:
       - ./src/backend/SDM/SDM.API/firebase-sa.json:/app/firebase-sa.json
+      - sdm_uploads:/app/uploads
 
   frontend:
     build:
@@ -64,3 +65,4 @@ services:
 
 volumes:
   sdm_pgdata:
+  sdm_uploads:

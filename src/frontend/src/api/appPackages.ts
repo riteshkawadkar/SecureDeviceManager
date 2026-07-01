@@ -35,3 +35,9 @@ export const getInstallations = (id: string) =>
 
 export const getDeviceInstalledApps = (deviceId: string) =>
   client.get<PagedResult<DeviceInstalledApp>>(`/devices/${deviceId}/installed-apps`).then((r) => r.data);
+
+export const uploadApk = (file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return client.post<{ url: string }>('/app-packages/upload-apk', form).then((r) => r.data);
+};

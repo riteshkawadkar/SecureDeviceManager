@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileProviders;
 using SDM.Application.DTOs.AppPackage;
 using SDM.Application.Interfaces;
 using SDM.Domain.Constants;
@@ -12,10 +13,12 @@ namespace SDM.API.Controllers
     public class AppPackagesController : ControllerBase
     {
         private readonly IAppPackageService _appPackageService;
+        private readonly IWebHostEnvironment _env;
 
-        public AppPackagesController(IAppPackageService appPackageService)
+        public AppPackagesController(IAppPackageService appPackageService, IWebHostEnvironment env)
         {
             _appPackageService = appPackageService;
+            _env = env;
         }
 
         private Guid? ActorUserId
@@ -89,6 +92,30 @@ namespace SDM.API.Controllers
         {
             var result = await _appPackageService.GetInstallationsAsync(id);
             return Ok(result);
+        }
+
+        [Authorize(Roles = Roles.AdminAndUp)]
+        [HttpPost("upload-apk")]
+        [RequestSizeLimit(200 * 1024 * 1024)]
+        [RequestFormLimits(MultipartBodyLengthLimit = 200 * 1024 * 1024)]
+        public async Task<IActionResult> UploadApk(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "No file provided." });
+            if (!file.FileName.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { message = "Only .apk files are allowed." });
+
+            var uploadsDir = Path.Combine(_env.ContentRootPath, "uploads", "apks");
+            Directory.CreateDirectory(uploadsDir);
+
+            var filename = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            var filePath = Path.Combine(uploadsDir, filename);
+
+            using var stream = System.IO.File.Create(filePath);
+            await file.CopyToAsync(stream);
+
+            var baseUrl = $"{Request.Scheme}://{Request.Host}";
+            return Ok(new { url = $"{baseUrl}/uploads/apks/{filename}" });
         }
     }
 }

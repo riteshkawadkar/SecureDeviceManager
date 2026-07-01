@@ -130,6 +130,15 @@ if (app.Environment.IsDevelopment() && (hangfireEnabled))
 
 app.UseCors("FrontendDev");
 
+// Serve uploaded APK files
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads"
+});
+
 // Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();

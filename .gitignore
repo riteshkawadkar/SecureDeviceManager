@@ -19,6 +19,8 @@ TestResults/
 **/appsettings.Production.json
 **/firebase-sa.json
 **/firebase-sa*.json
+**/*-sa.json
+*.pem
 
 # ── Android / Gradle ─────────────────────────────────────────────────────────
 *.iml

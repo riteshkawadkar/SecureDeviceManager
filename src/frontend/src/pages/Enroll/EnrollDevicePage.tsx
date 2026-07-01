@@ -11,12 +11,7 @@ import type { Device, PagedResult } from '../../types/device';
 
 type EnrollMethod = 'qr' | 'token' | 'zero-touch';
 
-const STEPS = [
-  { label: 'Enrollment Method', done: true, active: false },
-  { label: 'Configure & Send', done: false, active: true },
-  { label: 'Device Connects', done: false, active: false },
-  { label: 'Auto-Configure', done: false, active: false },
-];
+const STEP_LABELS = ['Install Agent', 'Choose & Generate', 'Device Connects', 'Auto-Configure'];
 
 const isPagedResult = (d: unknown): d is PagedResult<Device> =>
   !!d && typeof (d as PagedResult<Device>).total === 'number';
@@ -29,6 +24,7 @@ export default function EnrollDevicePage() {
   const [isPolling, setIsPolling] = useState(false);
   const [connectedDevice, setConnectedDevice] = useState<{ id: string; identifier: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [appInstalled, setAppInstalled] = useState(false);
   const qrContainerRef = useRef<HTMLDivElement>(null);
   const tokenCreatedAtRef = useRef<Date | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -36,6 +32,14 @@ export default function EnrollDevicePage() {
   const qrValue = tokenData
     ? `sdm://enroll?token=${encodeURIComponent(tokenData.token)}`
     : '';
+
+  // Dynamic step indicator: driven entirely from state
+  const currentPhase = connectedDevice ? 3 : isPolling ? 2 : appInstalled ? 1 : 0;
+  const steps = STEP_LABELS.map((label, i) => ({
+    label,
+    done: i < currentPhase,
+    active: i === currentPhase,
+  }));
 
   useEffect(() => {
     if (!isPolling) return;
@@ -107,14 +111,14 @@ export default function EnrollDevicePage() {
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Enroll New Device</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Scan the QR code during Android device setup — device info is captured automatically on first check-in
+          Install the SDM Agent on the Android device, then scan the QR code or enter the enrollment token to register it.
         </p>
       </div>
 
-      {/* Step Indicator */}
+      {/* Step Indicator — updates as user progresses */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-6 py-4">
         <div className="flex items-start">
-          {STEPS.map((step, i) => (
+          {steps.map((step, i) => (
             <div key={i} className="flex items-center flex-1">
               <div className="flex flex-col items-center">
                 <div
@@ -136,7 +140,7 @@ export default function EnrollDevicePage() {
                   {step.label}
                 </span>
               </div>
-              {i < STEPS.length - 1 && (
+              {i < steps.length - 1 && (
                 <div
                   className={`flex-1 h-0.5 mx-3 mb-5 ${step.done ? 'bg-blue-600' : 'bg-gray-200'}`}
                 />
@@ -154,22 +158,76 @@ export default function EnrollDevicePage() {
             <Info size={15} className="text-blue-600 shrink-0 mt-0.5" />
             <p className="text-sm text-blue-800 leading-relaxed">
               <span className="font-semibold">How it works:</span>{' '}
-              {method === 'qr'
-                ? 'Generate a QR code and scan it during Android device setup. The MDM agent automatically captures device details (model, IMEI, OS version) on first check-in — no manual entry needed.'
-                : 'Generate a token and share it with the user. They paste it into the SDM companion app to register the device. The agent handles the rest automatically.'}
+              Install the SDM Agent APK on the device, then generate a{' '}
+              {method === 'qr' ? 'QR code to scan during setup' : 'token to enter in the agent app'}.
+              Device info is captured automatically on first check-in — no manual entry needed.
             </p>
           </div>
 
-          {/* 1 · Enrollment Method — ACTIVE */}
+          {/* 1 · Install Agent App */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-4">
-              <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-                1
+              <span
+                className={`w-6 h-6 ${currentPhase > 0 ? 'bg-blue-600' : 'bg-blue-600'} text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0`}
+              >
+                {currentPhase > 0 ? <Check size={12} /> : '1'}
+              </span>
+              Install Agent App
+            </h2>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Download the SDM Agent APK and install it on the Android device you want to enroll.
+              </p>
+
+              <a
+                href="/api/enrollment/agent-apk"
+                download="sdm-agent.apk"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Download size={14} />
+                Download SDM Agent APK
+              </a>
+
+              <div className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 flex gap-2.5">
+                <Info size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-800 leading-relaxed space-y-1">
+                  <p>
+                    <span className="font-semibold">Sideload instructions:</span> Transfer the APK to the device (USB, email, or shared drive), then open it to install.
+                  </p>
+                  <p>
+                    If prompted, enable <span className="font-semibold">Install from unknown sources</span> via{' '}
+                    Settings → Apps → Special app access → Install unknown apps.
+                  </p>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer select-none group">
+                <input
+                  type="checkbox"
+                  checked={appInstalled}
+                  onChange={(e) => setAppInstalled(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 accent-blue-600"
+                />
+                <span className="text-sm text-gray-700 font-medium group-hover:text-gray-900 transition-colors">
+                  SDM Agent app is installed on the device
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* 2 · Enrollment Method */}
+          <div className={`bg-white rounded-xl border border-gray-100 shadow-sm p-5 transition-opacity ${!appInstalled ? 'opacity-50 pointer-events-none' : ''}`}>
+            <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-4">
+              <span
+                className={`w-6 h-6 ${currentPhase > 1 ? 'bg-blue-600' : appInstalled ? 'bg-blue-600 ring-4 ring-blue-100' : 'bg-gray-200 text-gray-400'} text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0`}
+              >
+                {currentPhase > 1 ? <Check size={12} /> : '2'}
               </span>
               Enrollment Method
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* QR Code — selectable */}
+              {/* QR Code — recommended */}
               <MethodCard
                 selected={method === 'qr'}
                 onSelect={() => handleMethodChange('qr')}
@@ -187,10 +245,10 @@ export default function EnrollDevicePage() {
                 badge="Recommended"
                 badgeClass="text-green-600 bg-green-50"
                 title="QR Code Enrollment"
-                description="Generate a QR code the user scans during initial Android device setup (factory reset or new device)."
+                description="Open the SDM Agent app and tap 'Scan QR Code'. Point the camera at the code to enroll."
               />
 
-              {/* Token — active */}
+              {/* Token — manual */}
               <MethodCard
                 selected={method === 'token'}
                 onSelect={() => handleMethodChange('token')}
@@ -199,7 +257,7 @@ export default function EnrollDevicePage() {
                 badge="Manual"
                 badgeClass="text-purple-600 bg-purple-50"
                 title="Enrollment Token"
-                description="Share a token the user pastes into the MDM companion app to register the device."
+                description="Generate a short token (e.g. A3XK-Q7MH-P2NB) and type it in the SDM Agent app."
               />
 
               {/* Zero-Touch — coming soon */}
@@ -211,9 +269,9 @@ export default function EnrollDevicePage() {
             </div>
           </div>
 
-          {/* 2 · Assignment — Coming Soon */}
+          {/* 3 · Assignment — Coming Soon */}
           <ComingSoonSection
-            number={2}
+            number={3}
             title="Assignment"
             subtitle="— group the device and auto-select an appropriate policy"
             description="Device assignment to groups, departments, and users will be available in an upcoming release. Currently, device details are captured automatically when the device checks in post-enrollment."
@@ -265,14 +323,14 @@ export default function EnrollDevicePage() {
                   <div className="w-40 h-40 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2">
                     <QrCode size={28} className="text-gray-300" />
                     <p className="text-xs text-gray-400 text-center px-3 leading-relaxed">
-                      Click below to generate
+                      {appInstalled ? 'Click below to generate' : 'Install the agent first'}
                     </p>
                   </div>
                 )}
               </div>
 
               <p className="text-xs text-gray-400 text-center mb-4">
-                Scan during Android setup wizard or via the MDM Companion app.
+                Open SDM Agent → Scan QR Code → point at this code.
               </p>
 
               {tokenData ? (
@@ -286,12 +344,18 @@ export default function EnrollDevicePage() {
               ) : (
                 <button
                   onClick={handleGenerate}
-                  disabled={isGenerating}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  disabled={isGenerating || !appInstalled}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <QrCode size={14} />
                   {isGenerating ? 'Generating...' : 'Generate QR Code'}
                 </button>
+              )}
+
+              {!appInstalled && !tokenData && (
+                <p className="text-xs text-amber-600 text-center mt-2 font-medium">
+                  Install the agent app first (Step 1)
+                </p>
               )}
 
               <div className="mt-2">
@@ -320,10 +384,13 @@ export default function EnrollDevicePage() {
 
               {tokenData ? (
                 <>
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
-                    <p className="text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wide">Token</p>
-                    <p className="font-mono text-xs text-gray-800 break-all leading-relaxed select-all">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3">
+                    <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Token</p>
+                    <p className="font-mono text-2xl font-bold text-gray-800 text-center tracking-widest select-all">
                       {tokenData.token}
+                    </p>
+                    <p className="text-xs text-gray-400 text-center mt-2">
+                      Open SDM Agent → Enter Token → type the code above
                     </p>
                   </div>
                   <button
@@ -354,26 +421,32 @@ export default function EnrollDevicePage() {
                   <div className="w-full h-28 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 mb-4">
                     <Hash size={26} className="text-gray-300" />
                     <p className="text-xs text-gray-400 text-center px-4 leading-relaxed">
-                      Click below to generate a token
+                      {appInstalled ? 'Click below to generate a token' : 'Install the agent first'}
                     </p>
                   </div>
                   <button
                     onClick={handleGenerate}
-                    disabled={isGenerating}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60"
+                    disabled={isGenerating || !appInstalled}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Hash size={14} />}
                     {isGenerating ? 'Generating...' : 'Generate Token'}
                   </button>
-                  <p className="text-xs text-gray-400 text-center mt-3 leading-relaxed">
-                    Share the token with the user — they paste it in the MDM companion app.
-                  </p>
+                  {!appInstalled ? (
+                    <p className="text-xs text-amber-600 text-center mt-2 font-medium">
+                      Install the agent app first (Step 1)
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center mt-3 leading-relaxed">
+                      Open SDM Agent → Enter Token → type the generated code.
+                    </p>
+                  )}
                 </>
               )}
             </div>
           )}
 
-          {/* Awaiting Connection — live polling after QR is generated */}
+          {/* Awaiting Connection — live polling after QR/token is generated */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             {connectedDevice ? (
               <div className="flex flex-col items-center text-center">
@@ -401,9 +474,9 @@ export default function EnrollDevicePage() {
                 <p className="text-sm font-semibold text-gray-800 mb-1">Waiting for Device</p>
                 <p className="text-xs text-gray-400 leading-relaxed mb-3">
                   {method === 'qr'
-                    ? 'Scan the QR code on your Android device.'
-                    : 'Paste the token into the MDM companion app on the device.'}{' '}
-                  This panel will update automatically when the device checks in.
+                    ? 'Open SDM Agent on the device and tap "Scan QR Code".'
+                    : 'Open SDM Agent on the device and tap "Enter Token".'}{' '}
+                  This panel updates automatically when the device checks in.
                 </p>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
@@ -417,9 +490,11 @@ export default function EnrollDevicePage() {
                 </div>
                 <p className="text-sm font-semibold text-gray-800 mb-1">Awaiting Device Connection</p>
                 <p className="text-xs text-gray-400 leading-relaxed mb-3">
-                  {method === 'qr'
-                    ? 'Generate the QR code above, then scan it on your Android device during setup.'
-                    : 'Generate the token above, then paste it in the MDM companion app on the device.'}
+                  {appInstalled
+                    ? method === 'qr'
+                      ? 'Generate the QR code above, then scan it in the SDM Agent app.'
+                      : 'Generate the token above, then enter it in the SDM Agent app.'
+                    : 'Install the SDM Agent on the device first, then generate an enrollment code.'}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />

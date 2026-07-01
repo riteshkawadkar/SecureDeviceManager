@@ -12,10 +12,35 @@ namespace SDM.API.Controllers
     public class EnrollmentController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
+        private readonly IWebHostEnvironment _env;
 
-        public EnrollmentController(ApplicationDbContext db)
+        public EnrollmentController(ApplicationDbContext db, IWebHostEnvironment env)
         {
             _db = db;
+            _env = env;
+        }
+
+        // Generates a human-friendly token like A3XK-Q7MH-P2NB (avoids confusable chars 0/O/1/I)
+        private static string GenerateFriendlyToken()
+        {
+            const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 chars — 256 % 32 == 0, no bias
+            var bytes = new byte[12];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+            var result = new char[12];
+            for (int i = 0; i < 12; i++)
+                result[i] = chars[bytes[i] % chars.Length];
+            return $"{new string(result, 0, 4)}-{new string(result, 4, 4)}-{new string(result, 8, 4)}";
+        }
+
+        // Serves the SDM Agent APK placed at uploads/agent.apk on the server
+        [AllowAnonymous]
+        [HttpGet("agent-apk")]
+        public IActionResult DownloadAgentApk()
+        {
+            var apkPath = Path.Combine(_env.ContentRootPath, "uploads", "agent.apk");
+            if (!System.IO.File.Exists(apkPath))
+                return NotFound(new { error = "Agent APK not found. Place the APK at uploads/agent.apk on the server." });
+            return PhysicalFile(apkPath, "application/vnd.android.package-archive", "sdm-agent.apk");
         }
 
         // Simple web enrollment page rendering minimal HTML form for device/browser enrollment
@@ -87,7 +112,7 @@ namespace SDM.API.Controllers
             var token = new SDM.Domain.Entities.EnrollmentToken
             {
                 Id = Guid.NewGuid(),
-                Token = Guid.NewGuid().ToString(),
+                Token = GenerateFriendlyToken(),
                 ExpiresOn = DateTime.UtcNow.AddMinutes(request.ExpiresInMinutes),
                 MaxDevices = request.MaxDevices,
                 IsActive = true
@@ -110,7 +135,7 @@ namespace SDM.API.Controllers
             var token = new SDM.Domain.Entities.EnrollmentToken
             {
                 Id = Guid.NewGuid(),
-                Token = Guid.NewGuid().ToString(),
+                Token = GenerateFriendlyToken(),
                 ExpiresOn = DateTime.UtcNow.AddMinutes(request.ExpiresInMinutes),
                 MaxDevices = request.MaxDevices,
                 IsActive = true
@@ -141,7 +166,7 @@ namespace SDM.API.Controllers
             var token = new SDM.Domain.Entities.EnrollmentToken
             {
                 Id = Guid.NewGuid(),
-                Token = Guid.NewGuid().ToString(),
+                Token = GenerateFriendlyToken(),
                 ExpiresOn = DateTime.UtcNow.AddMinutes(request.ExpiresInMinutes),
                 MaxDevices = request.MaxDevices,
                 IsActive = true
