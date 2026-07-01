@@ -95,7 +95,7 @@ class CommandExecutor(private val context: Context) {
 
                 "WipeData", "wipe-data" -> {
                     Log.d(TAG, "WipeData received (disabled for safety)")
-                    success = true
+                    success = false
                 }
 
                 "Reboot" -> {

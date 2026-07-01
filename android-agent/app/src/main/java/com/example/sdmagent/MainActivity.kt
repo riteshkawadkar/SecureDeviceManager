@@ -198,6 +198,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val requestNotificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.d("MainActivity", "POST_NOTIFICATIONS permission result: granted=$granted")
+    }
+
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
             lifecycleScope.launch {
@@ -307,6 +313,15 @@ class MainActivity : AppCompatActivity() {
 
         refreshEnrollmentStatus()
         refreshAdminStatus()
+
+        // Re-register workers and request permissions whenever app starts, even after reinstall
+        if (getPrefs().getString("device_id", null) != null) {
+            scheduleHeartbeat()
+            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS") != 0) {
+                requestNotificationPermission.launch("android.permission.POST_NOTIFICATIONS")
+            }
+        }
 
         btnRequestAdmin.setOnClickListener { promptDeviceAdmin() }
 
