@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import {
   Download, Mail, Check, Smartphone, Shield,
-  Package, Info, ChevronLeft, Hash, Zap, QrCode, Clock, Loader2, Copy,
+  Package, Info, ChevronLeft, Hash, Zap, QrCode, Clock, Loader2, Copy, X,
 } from 'lucide-react';
 import { createToken } from '../../api/enrollment';
 import { listDevices } from '../../api/devices';
@@ -25,6 +25,8 @@ export default function EnrollDevicePage() {
   const [connectedDevice, setConnectedDevice] = useState<{ id: string; identifier: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [appInstalled, setAppInstalled] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
   const qrContainerRef = useRef<HTMLDivElement>(null);
   const tokenCreatedAtRef = useRef<Date | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -96,6 +98,39 @@ export default function EnrollDevicePage() {
     a.href = url;
     a.download = 'enrollment-qr.png';
     a.click();
+  }
+
+  function handleOpenEmailClient() {
+    const apkUrl = `${window.location.origin}/api/enrollment/agent-apk`;
+    const subject = 'Install SDM Agent — Device Enrollment Instructions';
+    const tokenLine = tokenData
+      ? `Open the SDM Agent app and tap "Enter Token", then type this code:\n\n    ${tokenData.token}\n\nYour device will be configured automatically once enrolled.\n\nToken expires: ${new Date(tokenData.expiresOn).toLocaleString()}`
+      : `Open the SDM Agent app. Your enrollment code will be shared separately.`;
+
+    const body = `Hi,
+
+Please follow these steps to enroll your Android device with SecureDeviceManager.
+
+──── STEP 1: INSTALL SDM AGENT ────
+
+Download the SDM Agent app and install it on your Android device:
+${apkUrl}
+
+Transfer the APK to your device via USB, email, or a shared drive, then open it to install.
+
+If prompted, enable "Install from unknown sources":
+  Settings → Apps → Special app access → Install unknown apps
+  → allow for your browser or file manager
+
+──── STEP 2: ENROLL YOUR DEVICE ────
+
+${tokenLine}
+
+If you have trouble, contact your IT administrator.`;
+
+    const mailto = `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
+    setShowEmailModal(false);
   }
 
   function handleCopyToken() {
@@ -360,14 +395,11 @@ export default function EnrollDevicePage() {
 
               <div className="mt-2">
                 <button
-                  disabled
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-400 text-sm font-medium rounded-lg cursor-not-allowed"
+                  onClick={() => setShowEmailModal(true)}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <Mail size={14} />
                   Send via Email
-                  <span className="ml-1 text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                    Soon
-                  </span>
                 </button>
               </div>
 
@@ -411,6 +443,13 @@ export default function EnrollDevicePage() {
                   >
                     <Hash size={14} />
                     {isGenerating ? 'Generating...' : 'Regenerate'}
+                  </button>
+                  <button
+                    onClick={() => setShowEmailModal(true)}
+                    className="w-full mt-2 inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <Mail size={14} />
+                    Send via Email
                   </button>
                   <p className="text-xs text-gray-400 text-center mt-3">
                     Token expires {new Date(tokenData.expiresOn).toLocaleString()}
@@ -505,6 +544,18 @@ export default function EnrollDevicePage() {
           </div>
         </div>
       </div>
+
+      {/* Email Modal */}
+      {showEmailModal && (
+        <EmailModal
+          emailTo={emailTo}
+          tokenData={tokenData}
+          method={method}
+          onEmailChange={setEmailTo}
+          onSend={handleOpenEmailClient}
+          onClose={() => setShowEmailModal(false)}
+        />
+      )}
 
       {/* Footer */}
       <div className="flex items-center pt-2 pb-4">
@@ -619,6 +670,114 @@ interface AfterEnrollItemProps {
   badge: string;
   badgeClass: string;
   description: string;
+}
+
+interface EmailModalProps {
+  emailTo: string;
+  tokenData: { token: string; expiresOn: string } | null;
+  method: EnrollMethod;
+  onEmailChange: (v: string) => void;
+  onSend: () => void;
+  onClose: () => void;
+}
+
+function EmailModal({ emailTo, tokenData, method, onEmailChange, onSend, onClose }: EmailModalProps) {
+  const apkUrl = `${window.location.origin}/api/enrollment/agent-apk`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Mail size={15} className="text-blue-600" />
+            </div>
+            <h2 className="text-sm font-semibold text-gray-900">Send Enrollment Instructions</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          {/* Recipient */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
+              Recipient Email
+            </label>
+            <input
+              type="email"
+              value={emailTo}
+              onChange={(e) => onEmailChange(e.target.value)}
+              placeholder="user@example.com"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            />
+          </div>
+
+          {/* Email preview */}
+          <div>
+            <p className="text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
+              Email Preview
+            </p>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3 text-xs text-gray-600 leading-relaxed font-mono">
+              <div>
+                <span className="text-gray-400">Step 1 — </span>
+                <span className="font-semibold text-gray-700">Install SDM Agent</span>
+                <br />
+                <a href={apkUrl} className="text-blue-600 break-all">{apkUrl}</a>
+                <p className="text-gray-400 mt-1 not-italic font-sans">
+                  Enable "Install from unknown sources" if prompted during install.
+                </p>
+              </div>
+              <div className="border-t border-gray-200 pt-3">
+                <span className="text-gray-400">Step 2 — </span>
+                <span className="font-semibold text-gray-700">
+                  {method === 'qr' ? 'Scan QR or Enter Token' : 'Enter Token'}
+                </span>
+                {tokenData ? (
+                  <p className="mt-1 text-gray-800 text-base font-bold tracking-widest">{tokenData.token}</p>
+                ) : (
+                  <p className="text-gray-400 italic mt-1 font-sans not-italic">
+                    (generate a token first — it will appear here)
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {!tokenData && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
+              <Info size={13} className="text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800">
+                Generate a QR code or token first so the enrollment code is included in the email.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSend}
+            disabled={!emailTo.trim()}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Mail size={14} />
+            Open Email Client
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AfterEnrollItem({ icon, iconBg, title, badge, badgeClass, description }: AfterEnrollItemProps) {

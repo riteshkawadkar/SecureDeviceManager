@@ -19,6 +19,10 @@ RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/ap
 # copy publish output
 COPY --from=build /app/publish ./
 
+# copy uploads directory (may contain pre-seeded agent APK)
+RUN mkdir -p ./uploads
+COPY SDM.API/uploads/ ./uploads/
+
 # copy entrypoint script
 COPY SDM.API/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
