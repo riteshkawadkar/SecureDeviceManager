@@ -75,6 +75,11 @@ if (!string.IsNullOrEmpty(jwtKey))
     {
         options.RequireHttpsMetadata = false;
         options.SaveToken = true;
+        // Without this, the JWT bearer handler remaps the "sub" claim to ClaimTypes.NameIdentifier
+        // on the way in, so every User.FindFirst(JwtRegisteredClaimNames.Sub) lookup across the
+        // controllers (device self-service endpoints, GetUserId(), audit actor resolution, etc.)
+        // silently finds nothing even though the token is valid and correctly signed.
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,

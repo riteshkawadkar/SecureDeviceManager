@@ -7,10 +7,10 @@ import {
 } from 'lucide-react';
 import { listDevices, sendBulkCommand } from '../../api/devices';
 import type { BulkCommandResult } from '../../api/devices';
-import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
+import { ComplianceBadge, LiveStatusBadge, EnrollmentTypeBadge, ManagementModeBadge } from '../../components/ui/StatusBadge';
 import type { Device, PagedResult } from '../../types/device';
-import { ComplianceStatus } from '../../types/device';
-import { POLICY_DEFS, BASELINE_ANDROID_VERSION, getIncompatiblePolicies } from '../../data/policyDefs';
+import { ComplianceStatus, ManagementMode } from '../../types/device';
+import { POLICY_DEFS, BASELINE_ANDROID_VERSION, getIncompatiblePolicies, isPolicyDeviceOwnerOnly } from '../../data/policyDefs';
 import type { PolicyDef } from '../../data/policyDefs';
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -173,6 +173,12 @@ function KioskCard({
               <Sparkles size={9} /> Special Command
             </span>
             <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 text-purple-600">Device Owner</span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-100 text-red-600"
+              title="Rejected by the server for BYOD Work Profile (Profile Owner) devices"
+            >
+              Blocked on BYOD
+            </span>
           </div>
           <p className="text-xs text-indigo-700/80 mt-1 leading-relaxed">{def.description}</p>
         </div>
@@ -359,6 +365,14 @@ export default function BulkPolicyPage() {
   // ── Deployment ────────────────────────────────────────────────────────────
 
   const enabledCommands = buildCommands(policyState);
+
+  // Of the currently-enabled policies, which ones the backend's CommandCapabilityValidator
+  // will reject for any BYOD Work Profile (Profile Owner) target device.
+  const enabledDeviceOwnerOnlyDefs = POLICY_DEFS.filter((d) => policyState[d.id]?.enabled && isPolicyDeviceOwnerOnly(d));
+
+  function countProfileOwnerAmong(list: Device[]): number {
+    return list.filter((d) => d.managementMode === ManagementMode.ProfileOwner).length;
+  }
 
   // Kiosk mode disables the keyguard so lock task survives screen-off (Android only allows
   // that when there's no secure lock screen). A password policy applied alongside it would
@@ -565,6 +579,14 @@ export default function BulkPolicyPage() {
                                 User Restriction
                               </span>
                             )}
+                            {isPolicyDeviceOwnerOnly(def) && (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-100 text-red-600"
+                                title="Rejected by the server for BYOD Work Profile (Profile Owner) devices"
+                              >
+                                Blocked on BYOD
+                              </span>
+                            )}
                             {def.versionCaveat && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500">
                                 Full effect needs {def.versionCaveat.minLabel}
@@ -682,6 +704,19 @@ export default function BulkPolicyPage() {
       ══════════════════════════════════════════════════════════════════════ */}
       {step === 2 && (
         <>
+          {enabledDeviceOwnerOnlyDefs.length > 0 && countProfileOwnerAmong(devices) > 0 && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-5 py-3.5">
+              <AlertTriangle size={15} className="text-red-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700 leading-relaxed">
+                <strong>{countProfileOwnerAmong(devices)}</strong> of the listed devices are BYOD Work Profile
+                (Profile Owner) devices. They will <strong>not</strong> receive:{' '}
+                <strong>{enabledDeviceOwnerOnlyDefs.map((d) => d.label).join(', ')}</strong> — those commands
+                only run on devices where the agent holds full Device Owner privileges. Other enabled commands
+                in this deployment still apply normally.
+              </p>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 space-y-3">
               <div className="flex items-center justify-between">
@@ -797,6 +832,16 @@ export default function BulkPolicyPage() {
                           <p className="text-xs text-gray-500 truncate">{d.assignedUserName ?? 'Unassigned'}</p>
                           <ComplianceBadge status={d.complianceStatus} />
                         </div>
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <EnrollmentTypeBadge type={d.enrollmentType} />
+                          <ManagementModeBadge mode={d.managementMode} />
+                        </div>
+                        {enabledDeviceOwnerOnlyDefs.length > 0 && d.managementMode === ManagementMode.ProfileOwner && (
+                          <p className="flex items-center gap-1 text-[11px] text-red-600 mt-1">
+                            <AlertTriangle size={11} className="shrink-0" />
+                            Won&rsquo;t receive {enabledDeviceOwnerOnlyDefs.map((w) => w.label).join(', ')} (Device Owner only)
+                          </p>
+                        )}
                         {versionWarnings.length > 0 && (
                           <p
                             className="flex items-center gap-1 text-[11px] text-amber-600 mt-1"
@@ -830,13 +875,15 @@ export default function BulkPolicyPage() {
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">OS</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Online</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Mode</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Compliance</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {devices.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-sm text-gray-400">
+                      <td colSpan={8} className="text-center py-10 text-sm text-gray-400">
                         No devices match your filters
                       </td>
                     </tr>
@@ -876,6 +923,17 @@ export default function BulkPolicyPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3"><LiveStatusBadge lastSeen={d.lastSeen} /></td>
+                        <td className="px-4 py-3"><EnrollmentTypeBadge type={d.enrollmentType} /></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <ManagementModeBadge mode={d.managementMode} />
+                            {enabledDeviceOwnerOnlyDefs.length > 0 && d.managementMode === ManagementMode.ProfileOwner && (
+                              <span title={`Won't receive: ${enabledDeviceOwnerOnlyDefs.map((w) => w.label).join(', ')}`}>
+                                <AlertTriangle size={12} className="text-red-500 shrink-0" />
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3"><ComplianceBadge status={d.complianceStatus} /></td>
                       </tr>
                       );
@@ -1000,6 +1058,22 @@ export default function BulkPolicyPage() {
                 </p>
               </div>
             </div>
+
+            {/* BYOD-specific warning — computed from the actual selected devices */}
+            {enabledDeviceOwnerOnlyDefs.length > 0 && countProfileOwnerAmong(allDevices.filter((d) => selected.has(d.id))) > 0 && (
+              <div className="px-5 py-3 bg-red-50/60">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700 leading-relaxed">
+                    <strong>{countProfileOwnerAmong(allDevices.filter((d) => selected.has(d.id)))}</strong> of your{' '}
+                    <strong>{selected.size}</strong> selected devices are BYOD Work Profile (Profile Owner) devices.
+                    The server will reject <strong>{enabledDeviceOwnerOnlyDefs.map((d) => d.label).join(', ')}</strong>{' '}
+                    for those devices — they&rsquo;ll show up as failed operations in the deployment result, while
+                    the rest of this bundle still applies to them normally.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Step 3 footer */}

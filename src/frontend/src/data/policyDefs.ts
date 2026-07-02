@@ -69,6 +69,16 @@ export const DEVICE_OWNER_ONLY_COMMANDS = new Set([
   'DisableBluetooth', 'EnableBluetooth',
 ]);
 
+/** True when this policy's commands are in DEVICE_OWNER_ONLY_COMMANDS — it will be silently
+ * rejected by the backend for any target device in ManagementMode.ProfileOwner (BYOD). */
+export function isPolicyDeviceOwnerOnly(def: PolicyDef): boolean {
+  if (def.binaryAction) {
+    return DEVICE_OWNER_ONLY_COMMANDS.has(def.binaryAction.trueCmd) || DEVICE_OWNER_ONLY_COMMANDS.has(def.binaryAction.falseCmd);
+  }
+  if (def.fixedCmd) return DEVICE_OWNER_ONLY_COMMANDS.has(def.fixedCmd);
+  return false;
+}
+
 export const POLICY_DEFS: PolicyDef[] = [
   // ── Security ────────────────────────────────────────────────────────────────
   {
