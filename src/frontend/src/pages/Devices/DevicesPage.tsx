@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Plus, MoreHorizontal, Eye, Trash2 } from 'lucide-react';
 import { listDevices, deleteDevice } from '../../api/devices';
-import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
+import { ComplianceBadge, LiveStatusBadge, EnrollmentTypeBadge, ManagementModeBadge } from '../../components/ui/StatusBadge';
 import Pagination from '../../components/ui/Pagination';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 import type { Device, PagedResult } from '../../types/device';
@@ -186,9 +186,11 @@ export default function DevicesPage() {
                 </button>
               </div>
               <p className="text-xs text-gray-400 leading-tight">{device.model} · {device.androidVersion}</p>
-              <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <LiveStatusBadge lastSeen={device.lastSeen} />
                 <ComplianceBadge status={device.complianceStatus} />
+                <EnrollmentTypeBadge type={device.enrollmentType} />
+                <ManagementModeBadge mode={device.managementMode} />
               </div>
               <p className="text-xs text-gray-400 mt-1.5">
                 {device.assignedUserName ?? 'Unassigned'} · seen {formatRelativeTime(device.lastSeen)}
@@ -227,6 +229,12 @@ export default function DevicesPage() {
                   Status
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Type
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Mode
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Compliance
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -241,7 +249,7 @@ export default function DevicesPage() {
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12">
+                  <td colSpan={10} className="text-center py-12">
                     <div className="inline-flex items-center gap-2 text-gray-400">
                       <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
                       Loading devices...
@@ -250,7 +258,7 @@ export default function DevicesPage() {
                 </tr>
               ) : devices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={10} className="text-center py-12 text-sm text-gray-400">
                     No devices found
                   </td>
                 </tr>
@@ -274,6 +282,8 @@ export default function DevicesPage() {
                   <td className="px-4 py-3 text-gray-600 text-sm">{device.assignedUserName ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs font-mono">{device.androidVersion}</td>
                   <td className="px-4 py-3"><LiveStatusBadge lastSeen={device.lastSeen} /></td>
+                  <td className="px-4 py-3"><EnrollmentTypeBadge type={device.enrollmentType} /></td>
+                  <td className="px-4 py-3"><ManagementModeBadge mode={device.managementMode} /></td>
                   <td className="px-4 py-3"><ComplianceBadge status={device.complianceStatus} /></td>
                   <td className="px-4 py-3 text-gray-500 text-xs" title={device.lastSeen ? new Date(device.lastSeen).toLocaleString() : undefined}>
                     {formatRelativeTime(device.lastSeen)}

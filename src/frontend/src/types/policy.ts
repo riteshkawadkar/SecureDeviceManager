@@ -6,6 +6,7 @@ export interface Policy {
   category: string;
   severity: string;
   commandType: string;
+  applicableEnrollmentTypes: string;
   createdOn: string;
 }
 
@@ -16,6 +17,7 @@ export interface CreatePolicyRequest {
   category: string;
   severity: string;
   commandType: string;
+  applicableEnrollmentTypes?: string;
 }
 
 export interface UpdatePolicyRequest {
@@ -24,6 +26,7 @@ export interface UpdatePolicyRequest {
   category: string;
   severity: string;
   commandType: string;
+  applicableEnrollmentTypes?: string;
 }
 
 export interface PolicyEnforceResult {

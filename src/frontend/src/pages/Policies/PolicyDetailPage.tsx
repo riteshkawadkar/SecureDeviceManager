@@ -39,6 +39,26 @@ function StatusBadge({ isEnabled }: { isEnabled: boolean }) {
   );
 }
 
+function EnrollmentTypesBadges({ applicableEnrollmentTypes }: { applicableEnrollmentTypes: string }) {
+  const types = applicableEnrollmentTypes
+    ? applicableEnrollmentTypes.split(',').map((t) => t.trim()).filter(Boolean)
+    : ['Corporate', 'BYOD'];
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {types.map((t) => (
+        <span
+          key={t}
+          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+            t === 'BYOD' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'
+          }`}
+        >
+          {t}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /* ── Stat card ──────────────────────────────────────────────────────────────── */
 interface StatProps { title: string; value: string | number; subtitle: string; subtitleCls?: string; icon: React.ReactNode }
 function StatCard({ title, value, subtitle, subtitleCls = 'text-gray-400', icon }: StatProps) {
@@ -134,6 +154,11 @@ function EditModal({ policy, onClose, onSave, isSaving }: {
   const [category, setCategory] = useState(policy.category);
   const [severity, setSeverity] = useState(policy.severity);
   const [commandType, setCommandType] = useState(policy.commandType ?? '');
+  const initialTypes = policy.applicableEnrollmentTypes
+    ? policy.applicableEnrollmentTypes.split(',').map((t) => t.trim())
+    : ['Corporate', 'BYOD'];
+  const [appliesToCorporate, setAppliesToCorporate] = useState(initialTypes.includes('Corporate'));
+  const [appliesToByod, setAppliesToByod] = useState(initialTypes.includes('BYOD'));
 
   const commandOptions = COMMAND_OPTIONS[category] ?? [];
 
@@ -145,7 +170,8 @@ function EditModal({ policy, onClose, onSave, isSaving }: {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ name: name.trim(), category, severity, policyJson: policy.policyJson, commandType });
+    const applicableEnrollmentTypes = [appliesToCorporate && 'Corporate', appliesToByod && 'BYOD'].filter(Boolean).join(',');
+    onSave({ name: name.trim(), category, severity, policyJson: policy.policyJson, commandType, applicableEnrollmentTypes });
   };
 
   return (
@@ -201,13 +227,36 @@ function EditModal({ policy, onClose, onSave, isSaving }: {
               </select>
             </div>
           )}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Applies To</label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={appliesToCorporate}
+                  onChange={(e) => setAppliesToCorporate(e.target.checked)}
+                  className="rounded border-gray-300 text-violet-600 focus-visible:ring-violet-500"
+                />
+                <span className="text-sm text-gray-700">Corporate</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={appliesToByod}
+                  onChange={(e) => setAppliesToByod(e.target.checked)}
+                  className="rounded border-gray-300 text-violet-600 focus-visible:ring-violet-500"
+                />
+                <span className="text-sm text-gray-700">BYOD</span>
+              </label>
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button" onClick={onClose}
               className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
             >Cancel</button>
             <button
-              type="submit" disabled={isSaving || !name.trim()}
+              type="submit" disabled={isSaving || !name.trim() || (!appliesToCorporate && !appliesToByod)}
               className="px-4 py-2 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
             >
               {isSaving ? 'Saving…' : 'Save Changes'}
@@ -626,6 +675,7 @@ export default function PolicyDetailPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold text-gray-900 text-balance">{policy.name}</h1>
                 <TypeBadge category={policy.category} />
+                <EnrollmentTypesBadges applicableEnrollmentTypes={policy.applicableEnrollmentTypes} />
                 <button
                   onClick={() => toggleMutation.mutate()}
                   disabled={toggleMutation.isPending}
@@ -797,6 +847,7 @@ export default function PolicyDetailPage() {
                 ['Type', TYPE_META[policy.category]?.label ?? policy.category],
                 ['Severity', policy.severity],
                 ['Status', policy.isEnabled ? 'Active' : 'Draft'],
+                ['Applies To', policy.applicableEnrollmentTypes || 'Corporate,BYOD'],
                 ['Command', policy.commandType || '—'],
                 ['Created', new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(policy.createdOn))],
                 ['Created By', 'Admin User'],

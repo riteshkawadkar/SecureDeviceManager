@@ -47,6 +47,7 @@ builder.Services.AddScoped<IAppPackageService, SDM.Infrastructure.Services.AppPa
 builder.Services.AddScoped<IDeviceInventoryService, SDM.Infrastructure.Services.DeviceInventoryService>();
 builder.Services.AddScoped<IAuditLogService, SDM.Infrastructure.Services.AuditLogService>();
 builder.Services.AddScoped<IViolationService, SDM.Infrastructure.Services.ViolationService>();
+builder.Services.AddScoped<IDeviceAssignmentService, SDM.Infrastructure.Services.DeviceAssignmentService>();
 
 // CORS for React frontend (Vite dev server on :5173)
 builder.Services.AddCors(options =>

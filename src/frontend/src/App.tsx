@@ -4,6 +4,7 @@ import LoginPage from './pages/Auth/LoginPage';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import DevicesPage from './pages/Devices/DevicesPage';
 import DeviceDetailPage from './pages/DeviceDetail/DeviceDetailPage';
+import DeviceGroupsPage from './pages/DeviceGroups/DeviceGroupsPage';
 import PoliciesPage from './pages/Policies/PoliciesPage';
 import PolicyDetailPage from './pages/Policies/PolicyDetailPage';
 import BulkPolicyPage from './pages/Policies/BulkPolicyPage';
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="devices" element={<DevicesPage />} />
           <Route path="devices/enroll" element={<EnrollDevicePage />} />
           <Route path="devices/:id" element={<DeviceDetailPage />} />
+          <Route path="device-groups" element={<DeviceGroupsPage />} />
           <Route path="policies" element={<PoliciesPage />} />
           <Route path="policies/:id" element={<PolicyDetailPage />} />
           <Route path="bulk-policies" element={<BulkPolicyPage />} />

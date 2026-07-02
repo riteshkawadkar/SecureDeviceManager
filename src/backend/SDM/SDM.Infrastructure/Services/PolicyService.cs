@@ -25,6 +25,7 @@ namespace SDM.Infrastructure.Services
             Category = p.Category,
             Severity = p.Severity,
             CommandType = p.CommandType,
+            ApplicableEnrollmentTypes = p.ApplicableEnrollmentTypes,
             CreatedOn = p.CreatedOn
         };
 
@@ -51,6 +52,7 @@ namespace SDM.Infrastructure.Services
                 Category = request.Category,
                 Severity = request.Severity,
                 CommandType = request.CommandType,
+                ApplicableEnrollmentTypes = request.ApplicableEnrollmentTypes,
                 CreatedOn = DateTime.UtcNow
             };
 
@@ -69,6 +71,7 @@ namespace SDM.Infrastructure.Services
             policy.Category = request.Category;
             policy.Severity = request.Severity;
             policy.CommandType = request.CommandType;
+            policy.ApplicableEnrollmentTypes = request.ApplicableEnrollmentTypes;
 
             await _db.SaveChangesAsync();
             return ToDto(policy);
@@ -83,6 +86,14 @@ namespace SDM.Infrastructure.Services
                 throw new InvalidOperationException("This policy has no command type configured.");
 
             var devices = await _db.Devices.AsNoTracking().ToListAsync();
+
+            var applicableTypes = policy.ApplicableEnrollmentTypes
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (applicableTypes.Count > 0)
+                devices = devices.Where(d => applicableTypes.Contains(d.EnrollmentType.ToString())).ToList();
+
             int sent = 0;
             foreach (var device in devices)
             {

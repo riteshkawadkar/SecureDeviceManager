@@ -74,6 +74,29 @@ namespace SDM.API.Controllers
             public string FcmToken { get; set; } = string.Empty;
         }
 
+        [HttpPost("update-management-mode")]
+        public async Task<IActionResult> UpdateManagementMode([FromBody] UpdateManagementModeRequest request)
+        {
+            var sub = User?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+            if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var deviceId))
+                return Unauthorized();
+
+            try
+            {
+                await _deviceService.UpdateManagementModeAsync(deviceId, request.ManagementMode);
+                return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        public class UpdateManagementModeRequest
+        {
+            public SDM.Domain.Enums.ManagementMode ManagementMode { get; set; }
+        }
+
         [Authorize(Roles = Roles.AllRoles)]
         [HttpGet]
         public async Task<IActionResult> GetAll(

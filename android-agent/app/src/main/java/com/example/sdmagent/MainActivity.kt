@@ -18,10 +18,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
@@ -49,7 +47,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.android.material.card.MaterialCardView
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 import android.graphics.BitmapFactory
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.LuminanceSource
@@ -74,10 +71,26 @@ data class DeviceRegisterWithTokenRequest(
 data class DeviceRegisterWithTokenResponse(
     val deviceId: String,
     val deviceJwt: String,
-    val expiresInSeconds: Int
+    val expiresInSeconds: Int,
+    // 0 = Corporate, 1 = BYOD — see SDM.Domain.Enums.EnrollmentType on the backend.
+    val enrollmentType: Int = 0
 )
 
 data class UpdateFcmTokenRequest(val fcmToken: String)
+
+// 0 = Unknown, 1 = DeviceOwner, 2 = ProfileOwner — see SDM.Domain.Enums.ManagementMode.
+data class UpdateManagementModeRequest(val managementMode: Int)
+
+object ManagementModeValues {
+    const val UNKNOWN = 0
+    const val DEVICE_OWNER = 1
+    const val PROFILE_OWNER = 2
+}
+
+object EnrollmentTypeValues {
+    const val CORPORATE = 0
+    const val BYOD = 1
+}
 
 data class ReportStatusRequest(val success: Boolean)
 
@@ -109,6 +122,12 @@ interface ApiService {
     suspend fun updateFcmToken(
         @Header("Authorization") auth: String,
         @Body req: UpdateFcmTokenRequest
+    ): Response<Unit>
+
+    @POST("api/devices/update-management-mode")
+    suspend fun updateManagementMode(
+        @Header("Authorization") auth: String,
+        @Body req: UpdateManagementModeRequest
     ): Response<Unit>
 
     @POST("api/devices/{deviceId}/commands/{commandId}/status")
@@ -172,6 +191,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etEnrollmentToken: TextInputEditText
     private lateinit var btnUnenroll: MaterialButton
     private lateinit var cardUnenroll: MaterialCardView
+    private lateinit var cardTestWorkProfile: MaterialCardView
+    private lateinit var btnTestWorkProfile: MaterialButton
+    private lateinit var tvWorkProfileStatus: TextView
     private lateinit var cardEnrollDevice: MaterialCardView
     private lateinit var layoutEnrolled: LinearLayout
     private lateinit var tvViewPolicies: TextView
@@ -203,6 +225,19 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         Log.d("MainActivity", "POST_NOTIFICATIONS permission result: granted=$granted")
+    }
+
+    private val workProfileLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Log.d("MainActivity", "Work Profile provisioning: SUCCESS — Play Protect did NOT block it")
+            Toast.makeText(this, "✅ Work Profile provisioned! SDM is Profile Owner.", Toast.LENGTH_LONG).show()
+            refreshWorkProfileStatus()
+        } else {
+            Log.w("MainActivity", "Work Profile provisioning: resultCode=${result.resultCode} (CANCELLED or blocked by Play Protect)")
+            Toast.makeText(this, "❌ Work Profile not created (cancelled or blocked)", Toast.LENGTH_LONG).show()
+        }
     }
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -275,6 +310,9 @@ class MainActivity : AppCompatActivity() {
         etEnrollmentToken = findViewById(R.id.etEnrollmentToken)
         btnUnenroll = findViewById(R.id.btnUnenroll)
         cardUnenroll = findViewById(R.id.cardUnenroll)
+        cardTestWorkProfile = findViewById(R.id.cardTestWorkProfile)
+        btnTestWorkProfile = findViewById(R.id.btnTestWorkProfile)
+        tvWorkProfileStatus = findViewById(R.id.tvWorkProfileStatus)
 
         cardEnrollDevice = findViewById(R.id.cardEnrollDevice)
         layoutEnrolled = findViewById(R.id.layoutEnrolled)
@@ -378,12 +416,16 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButton("Cancel", null)
                 .show()
         }
+
+        btnTestWorkProfile.setOnClickListener { triggerWorkProfileProvisioning() }
+        refreshWorkProfileStatus()
     }
 
     override fun onResume() {
         super.onResume()
         refreshAdminStatus()
         refreshEnrollmentStatus()
+        refreshWorkProfileStatus()
         // Poll for pending commands immediately when app is foregrounded
         if (getPrefs().getString("device_id", null) != null) {
             WorkManager.getInstance(this).enqueue(
@@ -506,11 +548,12 @@ class MainActivity : AppCompatActivity() {
                 val resp = api.register(req)
                 if (resp.isSuccessful && resp.body() != null) {
                     val body = resp.body()!!
-                    savePrefs(body.deviceJwt, body.deviceId, serverUrl)
+                    savePrefs(body.deviceJwt, body.deviceId, serverUrl, body.enrollmentType)
                     scheduleHeartbeat()
                     etEnrollmentToken.setText("")
                     refreshEnrollmentStatus()
                     Toast.makeText(this@MainActivity, "Device enrolled successfully", Toast.LENGTH_LONG).show()
+                    promptPostEnrollmentSetup(body.enrollmentType)
                 } else {
                     val err = resp.errorBody()?.string() ?: "Unknown error"
                     showError("Enrollment failed (${resp.code()}): $err")
@@ -532,47 +575,17 @@ class MainActivity : AppCompatActivity() {
         Snackbar.make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG).show()
     }
 
-    private fun savePrefs(jwt: String, deviceId: String, url: String) {
+    private fun savePrefs(jwt: String, deviceId: String, url: String, enrollmentType: Int) {
         getPrefs().edit()
             .putString("device_jwt", jwt)
             .putString("device_id", deviceId)
             .putString("server_url", url)
+            .putInt("enrollment_type", enrollmentType)
             .apply()
     }
 
     private fun scheduleHeartbeat() {
-        val networkConstraint = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "sdm_heartbeat",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<HeartbeatWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(networkConstraint)
-                .build()
-        )
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "sdm_policy_sync",
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<PolicySyncWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(networkConstraint)
-                .build()
-        )
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "sdm_app_inventory",
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<AppInventoryWorker>(6, TimeUnit.HOURS)
-                .setConstraints(networkConstraint)
-                .build()
-        )
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "sdm_command_poll",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<CommandPollingWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(networkConstraint)
-                .build()
-        )
+        WorkScheduler.scheduleAll(this)
         Log.d("MainActivity", "Background workers scheduled (heartbeat + policy sync + app inventory + command poll)")
     }
 
@@ -615,6 +628,86 @@ class MainActivity : AppCompatActivity() {
             refreshEnrollmentStatus()
             setEnrollmentUiEnabled(true)
             Toast.makeText(this@MainActivity, "Device unenrolled", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun refreshWorkProfileStatus() {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val enrollmentType = getPrefs().getInt("enrollment_type", EnrollmentTypeValues.CORPORATE)
+        val deviceId = getPrefs().getString("device_id", null)
+
+        // Only BYOD-enrolled, not-yet-provisioned devices need this card.
+        val relevant = deviceId != null && enrollmentType == EnrollmentTypeValues.BYOD && !dpm.isDeviceOwnerApp(packageName)
+        cardTestWorkProfile.visibility = if (relevant) View.VISIBLE else View.GONE
+        if (!relevant) return
+
+        tvWorkProfileStatus.text = when {
+            dpm.isProfileOwnerApp(packageName) -> "✅ Profile Owner — Work Profile is active"
+            else -> "Not set up yet. Tap below to create your Work Profile."
+        }
+        btnTestWorkProfile.isEnabled = !dpm.isProfileOwnerApp(packageName)
+    }
+
+    /** Shown right after a successful token enrollment, routing the user to the setup step their enrollment type requires. */
+    private fun promptPostEnrollmentSetup(enrollmentType: Int) {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        when (enrollmentType) {
+            EnrollmentTypeValues.BYOD -> {
+                if (dpm.isProfileOwnerApp(packageName) || dpm.isDeviceOwnerApp(packageName)) return
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("Set Up Work Profile")
+                    .setMessage("This is a BYOD device. SDM will create a separate, secure Work Profile to manage only your work apps — your personal data stays untouched.")
+                    .setPositiveButton("Set Up Now") { _, _ -> triggerWorkProfileProvisioning() }
+                    .setNegativeButton("Later", null)
+                    .show()
+            }
+            EnrollmentTypeValues.CORPORATE -> {
+                if (dpm.isAdminActive(ComponentName(this, AdminReceiver::class.java))) return
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("Enable Device Admin")
+                    .setMessage("This is a corporate device. Grant Device Admin so SDM can enforce security policies.")
+                    .setPositiveButton("Continue") { _, _ -> promptDeviceAdmin() }
+                    .setNegativeButton("Later", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun triggerWorkProfileProvisioning() {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        if (dpm.isProfileOwnerApp(packageName)) {
+            Toast.makeText(this, "Already Profile Owner in work profile", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val prefs = getPrefs()
+        val jwt = prefs.getString("device_jwt", null)
+        val deviceId = prefs.getString("device_id", null)
+        val savedUrl = prefs.getString("server_url", null) ?: serverUrl
+        if (jwt == null || deviceId == null) {
+            Toast.makeText(this, "Enroll with a token first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // Passed into the newly-provisioned Work Profile's own copy of the app — its storage is
+        // separate from this (personal-profile) instance, so it needs these to identify itself
+        // to the backend once AdminReceiver.onProfileProvisioningComplete fires inside the profile.
+        val adminExtras = android.os.PersistableBundle().apply {
+            putString("device_jwt", jwt)
+            putString("device_id", deviceId)
+            putString("server_url", savedUrl)
+        }
+        val intent = Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
+            putExtra(
+                DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME,
+                ComponentName(this@MainActivity, AdminReceiver::class.java)
+            )
+            putExtra(DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE, adminExtras)
+        }
+        if (intent.resolveActivity(packageManager) != null) {
+            Log.d("MainActivity", "Launching Work Profile provisioning intent")
+            workProfileLauncher.launch(intent)
+        } else {
+            Log.e("MainActivity", "ACTION_PROVISION_MANAGED_PROFILE not resolvable on this device")
+            Toast.makeText(this, "Work Profile provisioning not supported on this device/ROM", Toast.LENGTH_LONG).show()
         }
     }
 

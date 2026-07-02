@@ -5,6 +5,7 @@ namespace SDM.Application.DTOs.DeviceGroup
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? Category { get; set; }
         public int DeviceCount { get; set; }
     }
 
@@ -12,11 +13,13 @@ namespace SDM.Application.DTOs.DeviceGroup
     {
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? Category { get; set; }
     }
 
     public class UpdateDeviceGroupRequest
     {
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? Category { get; set; }
     }
 }

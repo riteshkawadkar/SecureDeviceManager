@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { createToken } from '../../api/enrollment';
 import { listDevices } from '../../api/devices';
+import { EnrollmentType } from '../../types/device';
 import type { Device, PagedResult } from '../../types/device';
 
 type EnrollMethod = 'qr' | 'token' | 'zero-touch';
@@ -19,6 +20,7 @@ const isPagedResult = (d: unknown): d is PagedResult<Device> =>
 export default function EnrollDevicePage() {
   const navigate = useNavigate();
   const [method, setMethod] = useState<EnrollMethod>('qr');
+  const [enrollmentType, setEnrollmentType] = useState<EnrollmentType>(EnrollmentType.Corporate);
   const [isGenerating, setIsGenerating] = useState(false);
   const [tokenData, setTokenData] = useState<{ token: string; expiresOn: string } | null>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -77,11 +79,20 @@ export default function EnrollDevicePage() {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
   }
 
+  function handleEnrollmentTypeChange(t: EnrollmentType) {
+    setEnrollmentType(t);
+    setTokenData(null);
+    setConnectedDevice(null);
+    setCopied(false);
+    setIsPolling(false);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+  }
+
   async function handleGenerate() {
     setIsGenerating(true);
     setConnectedDevice(null);
     try {
-      const res = await createToken({ maxDevices: 1, expiresInMinutes: 1440 });
+      const res = await createToken({ maxDevices: 1, expiresInMinutes: 1440, enrollmentType });
       tokenCreatedAtRef.current = new Date();
       setTokenData(res);
       setIsPolling(true);
@@ -261,6 +272,38 @@ If you have trouble, contact your IT administrator.`;
               </span>
               Enrollment Method
             </h2>
+
+            {/* Enrollment Type — Corporate (Device Owner) vs BYOD (Work Profile) */}
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Enrollment Type</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleEnrollmentTypeChange(EnrollmentType.Corporate)}
+                  className={`text-left rounded-xl border-2 p-3.5 transition-all ${
+                    enrollmentType === EnrollmentType.Corporate ? 'border-blue-500 bg-blue-50/30' : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-gray-800">Corporate</p>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                    Full device control (Device Owner). For company-owned hardware.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleEnrollmentTypeChange(EnrollmentType.BYOD)}
+                  className={`text-left rounded-xl border-2 p-3.5 transition-all ${
+                    enrollmentType === EnrollmentType.BYOD ? 'border-blue-500 bg-blue-50/30' : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-gray-800">BYOD</p>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                    Work profile only (Profile Owner). For personal devices.
+                  </p>
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* QR Code — recommended */}
               <MethodCard

@@ -38,6 +38,27 @@ function StatusBadge({ isEnabled }: { isEnabled: boolean }) {
   );
 }
 
+/* ── Applicable enrollment types badges ────────────────────────────────────── */
+function EnrollmentTypesBadges({ applicableEnrollmentTypes }: { applicableEnrollmentTypes: string }) {
+  const types = applicableEnrollmentTypes
+    ? applicableEnrollmentTypes.split(',').map((t) => t.trim()).filter(Boolean)
+    : ['Corporate', 'BYOD'];
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {types.map((t) => (
+        <span
+          key={t}
+          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+            t === 'BYOD' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'
+          }`}
+        >
+          {t}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /* ── Stat card ──────────────────────────────────────────────────────────────── */
 interface StatProps {
   title: string;
@@ -96,7 +117,7 @@ const SEVERITIES = ['Low', 'Medium', 'High', 'Critical'];
 
 interface CreateModalProps {
   onClose: () => void;
-  onSave: (data: { name: string; category: string; severity: string; isEnabled: boolean; policyJson: string; commandType: string }) => void;
+  onSave: (data: { name: string; category: string; severity: string; isEnabled: boolean; policyJson: string; commandType: string; applicableEnrollmentTypes: string }) => void;
   isSaving: boolean;
 }
 
@@ -106,6 +127,8 @@ function CreatePolicyModal({ onClose, onSave, isSaving }: CreateModalProps) {
   const [severity, setSeverity] = useState('Medium');
   const [enabled, setEnabled] = useState(true);
   const [commandType, setCommandType] = useState('DisableCamera');
+  const [appliesToCorporate, setAppliesToCorporate] = useState(true);
+  const [appliesToByod, setAppliesToByod] = useState(true);
 
   const commandOptions = COMMAND_OPTIONS[category] ?? [];
 
@@ -118,7 +141,8 @@ function CreatePolicyModal({ onClose, onSave, isSaving }: CreateModalProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave({ name: name.trim(), category, severity, isEnabled: enabled, policyJson: '{}', commandType });
+    const applicableEnrollmentTypes = [appliesToCorporate && 'Corporate', appliesToByod && 'BYOD'].filter(Boolean).join(',');
+    onSave({ name: name.trim(), category, severity, isEnabled: enabled, policyJson: '{}', commandType, applicableEnrollmentTypes });
   };
 
   return (
@@ -203,6 +227,29 @@ function CreatePolicyModal({ onClose, onSave, isSaving }: CreateModalProps) {
               <p className="text-xs text-gray-400 mt-1">This command will be dispatched to devices when you enforce the policy.</p>
             </div>
           )}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Applies To</label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={appliesToCorporate}
+                  onChange={(e) => setAppliesToCorporate(e.target.checked)}
+                  className="rounded border-gray-300 text-violet-600 focus-visible:ring-violet-500"
+                />
+                <span className="text-sm text-gray-700">Corporate</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={appliesToByod}
+                  onChange={(e) => setAppliesToByod(e.target.checked)}
+                  className="rounded border-gray-300 text-violet-600 focus-visible:ring-violet-500"
+                />
+                <span className="text-sm text-gray-700">BYOD</span>
+              </label>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <input
               id="policy-enabled"
@@ -226,7 +273,7 @@ function CreatePolicyModal({ onClose, onSave, isSaving }: CreateModalProps) {
             </button>
             <button
               type="submit"
-              disabled={isSaving || !name.trim()}
+              disabled={isSaving || !name.trim() || (!appliesToCorporate && !appliesToByod)}
               className="px-4 py-2 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors"
             >
               {isSaving ? 'Saving…' : 'Create Policy'}
@@ -454,7 +501,7 @@ export default function PoliciesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/60">
-                    {['Policy Name', 'Type', 'Status', 'Applied To', 'Created By', 'Created', 'Actions'].map((col) => (
+                    {['Policy Name', 'Type', 'Status', 'Enrollment', 'Applied To', 'Created By', 'Created', 'Actions'].map((col) => (
                       <th
                         key={col}
                         scope="col"
@@ -468,13 +515,13 @@ export default function PoliciesPage() {
                 <tbody className="divide-y divide-gray-50" aria-live="polite">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-gray-400">
+                      <td colSpan={8} className="text-center py-12 text-gray-400">
                         Loading…
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-gray-400">
+                      <td colSpan={8} className="text-center py-12 text-gray-400">
                         No policies match your filters.
                       </td>
                     </tr>
@@ -528,6 +575,10 @@ function PolicyRow({ policy }: { policy: Policy }) {
       <td className="px-5 py-3.5 whitespace-nowrap">
         <StatusBadge isEnabled={policy.isEnabled} />
       </td>
+      {/* Enrollment */}
+      <td className="px-5 py-3.5 whitespace-nowrap">
+        <EnrollmentTypesBadges applicableEnrollmentTypes={policy.applicableEnrollmentTypes} />
+      </td>
       {/* Applied To */}
       <td className="px-5 py-3.5 whitespace-nowrap text-sm text-gray-600">
         —
@@ -576,6 +627,9 @@ function PolicyCard({ policy }: { policy: Policy }) {
       <div className="flex items-center justify-between gap-3 mt-2.5">
         <TypeBadge category={policy.category} />
         <p className="text-xs text-gray-400 shrink-0">By Admin User · {formattedDate}</p>
+      </div>
+      <div className="mt-2">
+        <EnrollmentTypesBadges applicableEnrollmentTypes={policy.applicableEnrollmentTypes} />
       </div>
     </Link>
   );

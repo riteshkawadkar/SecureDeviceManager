@@ -39,6 +39,8 @@ namespace SDM.Infrastructure.Data
 
         public DbSet<SDM.Domain.Entities.DeviceInstalledApp> DeviceInstalledApps => Set<SDM.Domain.Entities.DeviceInstalledApp>();
 
+        public DbSet<SDM.Domain.Entities.DeviceAssignment> DeviceAssignments => Set<SDM.Domain.Entities.DeviceAssignment>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -132,6 +134,17 @@ namespace SDM.Infrastructure.Data
                 .WithMany()
                 .HasForeignKey(i => i.CommandId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // DeviceAssignment: one-to-one with Device
+            modelBuilder.Entity<SDM.Domain.Entities.DeviceAssignment>()
+                .HasOne(a => a.Device)
+                .WithOne(d => d.Assignment)
+                .HasForeignKey<SDM.Domain.Entities.DeviceAssignment>(a => a.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SDM.Domain.Entities.DeviceAssignment>()
+                .HasIndex(a => a.DeviceId)
+                .IsUnique();
 
             // Installed-app inventory
             modelBuilder.Entity<SDM.Domain.Entities.DeviceInstalledApp>()

@@ -9,6 +9,7 @@ namespace SDM.Application.DTOs.Policy
         public string Category { get; set; } = string.Empty;
         public string Severity { get; set; } = string.Empty;
         public string CommandType { get; set; } = string.Empty;
+        public string ApplicableEnrollmentTypes { get; set; } = "Corporate,BYOD";
         public DateTime CreatedOn { get; set; }
     }
 
@@ -20,6 +21,7 @@ namespace SDM.Application.DTOs.Policy
         public string Category { get; set; } = string.Empty;
         public string Severity { get; set; } = "medium";
         public string CommandType { get; set; } = string.Empty;
+        public string ApplicableEnrollmentTypes { get; set; } = "Corporate,BYOD";
     }
 
     public class UpdatePolicyRequest
@@ -29,6 +31,7 @@ namespace SDM.Application.DTOs.Policy
         public string Category { get; set; } = string.Empty;
         public string Severity { get; set; } = "medium";
         public string CommandType { get; set; } = string.Empty;
+        public string ApplicableEnrollmentTypes { get; set; } = "Corporate,BYOD";
     }
 
     public class PolicyEnforceResult

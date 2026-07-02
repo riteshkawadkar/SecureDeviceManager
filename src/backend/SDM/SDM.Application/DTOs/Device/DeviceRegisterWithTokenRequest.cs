@@ -1,4 +1,5 @@
 using System;
+using SDM.Domain.Enums;
 
 namespace SDM.Application.DTOs.Device
 {
@@ -10,7 +11,7 @@ namespace SDM.Application.DTOs.Device
         public string Manufacturer { get; set; } = string.Empty;
         public string Model { get; set; } = string.Empty;
         public string AndroidVersion { get; set; } = string.Empty;
-        // Optional FCM token provided at registration so server can notify the device immediately
         public string? FcmToken { get; set; }
+        public ManagementMode ManagementMode { get; set; } = ManagementMode.Unknown;
     }
 }

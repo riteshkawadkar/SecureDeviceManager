@@ -23,6 +23,7 @@ namespace SDM.Infrastructure.Services
                     Id = g.Id,
                     Name = g.Name,
                     Description = g.Description,
+                    Category = g.Category,
                     DeviceCount = g.Devices.Count
                 })
                 .ToListAsync();
@@ -36,7 +37,7 @@ namespace SDM.Infrastructure.Services
 
             if (g == null) return null;
 
-            return new DeviceGroupDto { Id = g.Id, Name = g.Name, Description = g.Description, DeviceCount = g.Devices.Count };
+            return new DeviceGroupDto { Id = g.Id, Name = g.Name, Description = g.Description, Category = g.Category, DeviceCount = g.Devices.Count };
         }
 
         public async Task<DeviceGroupDto> CreateAsync(CreateDeviceGroupRequest request)
@@ -45,13 +46,14 @@ namespace SDM.Infrastructure.Services
             {
                 Id = Guid.NewGuid(),
                 Name = request.Name,
-                Description = request.Description
+                Description = request.Description,
+                Category = request.Category
             };
 
             _db.DeviceGroups.Add(group);
             await _db.SaveChangesAsync();
 
-            return new DeviceGroupDto { Id = group.Id, Name = group.Name, Description = group.Description, DeviceCount = 0 };
+            return new DeviceGroupDto { Id = group.Id, Name = group.Name, Description = group.Description, Category = group.Category, DeviceCount = 0 };
         }
 
         public async Task<DeviceGroupDto?> UpdateAsync(Guid id, UpdateDeviceGroupRequest request)
@@ -61,9 +63,10 @@ namespace SDM.Infrastructure.Services
 
             group.Name = request.Name;
             group.Description = request.Description;
+            group.Category = request.Category;
             await _db.SaveChangesAsync();
 
-            return new DeviceGroupDto { Id = group.Id, Name = group.Name, Description = group.Description };
+            return new DeviceGroupDto { Id = group.Id, Name = group.Name, Description = group.Description, Category = group.Category };
         }
 
         public async Task<bool> DeleteAsync(Guid id)

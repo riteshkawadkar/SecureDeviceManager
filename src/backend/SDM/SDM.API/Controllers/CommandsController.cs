@@ -36,20 +36,27 @@ namespace SDM.API.Controllers
             var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
             Guid? actorUserId = Guid.TryParse(sub, out var actorId) ? actorId : null;
 
-            var cmd = await _commandService.CreateCommandAsync(deviceId, request.CommandType, payloadStr, actorUserId);
-            // Map to DTO to avoid circular JSON references
-            var resp = new SDM.Application.DTOs.Command.CommandResponse
+            try
             {
-                Id = cmd.Id,
-                DeviceId = cmd.DeviceId,
-                CommandType = cmd.CommandType,
-                Payload = cmd.Payload,
-                Status = (int)cmd.Status,
-                CreatedOn = cmd.CreatedOn,
-                ExecutedOn = cmd.ExecutedOn
-            };
+                var cmd = await _commandService.CreateCommandAsync(deviceId, request.CommandType, payloadStr, actorUserId);
+                // Map to DTO to avoid circular JSON references
+                var resp = new SDM.Application.DTOs.Command.CommandResponse
+                {
+                    Id = cmd.Id,
+                    DeviceId = cmd.DeviceId,
+                    CommandType = cmd.CommandType,
+                    Payload = cmd.Payload,
+                    Status = (int)cmd.Status,
+                    CreatedOn = cmd.CreatedOn,
+                    ExecutedOn = cmd.ExecutedOn
+                };
 
-            return CreatedAtAction(nameof(GetById), new { deviceId = deviceId, id = cmd.Id }, resp);
+                return CreatedAtAction(nameof(GetById), new { deviceId = deviceId, id = cmd.Id }, resp);
+            }
+            catch (SDM.Application.Exceptions.CommandNotSupportedException ex)
+            {
+                return UnprocessableEntity(new { message = ex.Message });
+            }
         }
 
         [Authorize(Roles = Roles.OperatorAndUp)]

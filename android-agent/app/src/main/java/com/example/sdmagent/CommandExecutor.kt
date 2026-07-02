@@ -82,6 +82,7 @@ class CommandExecutor(private val context: Context) {
         }
 
         val isDeviceOwner = dpm.isDeviceOwnerApp(context.packageName)
+        val isProfileOwner = dpm.isProfileOwnerApp(context.packageName)
 
         var success = false
         try {
@@ -144,23 +145,23 @@ class CommandExecutor(private val context: Context) {
 
                 "DisableApp", "disable-app" -> {
                     val pkg = data["packageName"]
-                    if (pkg != null && isDeviceOwner) {
+                    if (pkg != null && (isDeviceOwner || isProfileOwner)) {
                         dpm.setApplicationHidden(adminComponent, pkg, true)
                         Log.d(TAG, "App disabled: $pkg")
                         success = true
                     } else {
-                        Log.w(TAG, "DisableApp requires Device Owner. pkg=$pkg")
+                        Log.w(TAG, "DisableApp requires Device Owner or Profile Owner. pkg=$pkg")
                     }
                 }
 
                 "EnableApp", "enable-app" -> {
                     val pkg = data["packageName"]
-                    if (pkg != null && isDeviceOwner) {
+                    if (pkg != null && (isDeviceOwner || isProfileOwner)) {
                         dpm.setApplicationHidden(adminComponent, pkg, false)
                         Log.d(TAG, "App enabled: $pkg")
                         success = true
                     } else {
-                        Log.w(TAG, "EnableApp requires Device Owner. pkg=$pkg")
+                        Log.w(TAG, "EnableApp requires Device Owner or Profile Owner. pkg=$pkg")
                     }
                 }
 
@@ -187,22 +188,22 @@ class CommandExecutor(private val context: Context) {
                 }
 
                 "DisableAppInstall" -> {
-                    if (isDeviceOwner) {
+                    if (isDeviceOwner || isProfileOwner) {
                         dpm.addUserRestriction(adminComponent, RESTRICT_INSTALL_APPS)
                         Log.d(TAG, "App installation disabled")
                         success = true
                     } else {
-                        Log.w(TAG, "DisableAppInstall requires Device Owner")
+                        Log.w(TAG, "DisableAppInstall requires Device Owner or Profile Owner")
                     }
                 }
 
                 "EnableAppInstall" -> {
-                    if (isDeviceOwner) {
+                    if (isDeviceOwner || isProfileOwner) {
                         dpm.clearUserRestriction(adminComponent, RESTRICT_INSTALL_APPS)
                         Log.d(TAG, "App installation enabled")
                         success = true
                     } else {
-                        Log.w(TAG, "EnableAppInstall requires Device Owner")
+                        Log.w(TAG, "EnableAppInstall requires Device Owner or Profile Owner")
                     }
                 }
 
@@ -329,7 +330,7 @@ class CommandExecutor(private val context: Context) {
                 }
 
                 "SetWebRestrictions" -> {
-                    if (isDeviceOwner) {
+                    if (isDeviceOwner || isProfileOwner) {
                         val blockedJson = data["blockedUrls"] ?: "[]"
                         val allowedJson = data["allowedUrls"] ?: "[]"
                         try {
@@ -348,20 +349,20 @@ class CommandExecutor(private val context: Context) {
                             Log.e(TAG, "Failed to apply web restrictions", e)
                         }
                     } else {
-                        Log.w(TAG, "SetWebRestrictions requires Device Owner")
+                        Log.w(TAG, "SetWebRestrictions requires Device Owner or Profile Owner")
                     }
                 }
 
                 "SetUserRestriction" -> {
                     val restriction = data["restriction"]
                     val enabled = data["enabled"]?.toBoolean() ?: true
-                    if (restriction != null && isDeviceOwner) {
+                    if (restriction != null && (isDeviceOwner || isProfileOwner)) {
                         if (enabled) dpm.addUserRestriction(adminComponent, restriction)
                         else dpm.clearUserRestriction(adminComponent, restriction)
                         Log.d(TAG, "User restriction ${if (enabled) "applied" else "lifted"}: $restriction")
                         success = true
                     } else {
-                        Log.w(TAG, "SetUserRestriction requires Device Owner and a restriction key. restriction=$restriction")
+                        Log.w(TAG, "SetUserRestriction requires Device Owner or Profile Owner and a restriction key. restriction=$restriction")
                     }
                 }
 

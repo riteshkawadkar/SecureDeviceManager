@@ -18,6 +18,9 @@ namespace SDM.Domain.Entities
 
         public string CommandType { get; set; } = string.Empty;
 
+        /// <summary>Comma-separated EnrollmentType names this policy applies to, e.g. "Corporate,BYOD". Empty means all.</summary>
+        public string ApplicableEnrollmentTypes { get; set; } = "Corporate,BYOD";
+
         public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
     }
 }

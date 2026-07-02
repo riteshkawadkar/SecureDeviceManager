@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using SDM.Application.Interfaces;
 using SDM.Domain.Entities;
 using SDM.Domain;
+using SDM.Domain.Enums;
 using SDM.Infrastructure.Data;
 
 namespace SDM.Infrastructure.Services
@@ -123,6 +124,16 @@ namespace SDM.Infrastructure.Services
             await _db.SaveChangesAsync();
         }
 
+        public async Task UpdateManagementModeAsync(Guid deviceId, ManagementMode managementMode)
+        {
+            var device = await _db.Devices.FirstOrDefaultAsync(d => d.Id == deviceId);
+            if (device == null) throw new KeyNotFoundException("Device not found");
+
+            device.ManagementMode = managementMode;
+            device.UpdatedOn = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
         public async Task<IEnumerable<Device>> GetAllAsync()
         {
             return await _db.Devices
@@ -165,6 +176,8 @@ namespace SDM.Infrastructure.Services
                     ComplianceStatus = d.ComplianceStatus,
                     AssignedUserName = d.AssignedUserName,
                     GroupId = d.GroupId,
+                    EnrollmentType = d.EnrollmentType,
+                    ManagementMode = d.ManagementMode,
                     CreatedOn = d.CreatedOn,
                     UpdatedOn = d.UpdatedOn
                 })
@@ -252,6 +265,8 @@ namespace SDM.Infrastructure.Services
                 existing.Manufacturer = request.Manufacturer;
                 existing.Model = request.Model;
                 existing.AndroidVersion = request.AndroidVersion;
+                existing.EnrollmentType = token.EnrollmentType;
+                existing.ManagementMode = request.ManagementMode;
                 existing.UpdatedOn = DateTime.UtcNow;
 
                 await _db.SaveChangesAsync();
@@ -268,6 +283,8 @@ namespace SDM.Infrastructure.Services
                     Model = request.Model,
                     AndroidVersion = request.AndroidVersion,
                     Status = DeviceStatus.Online,
+                    EnrollmentType = token.EnrollmentType,
+                    ManagementMode = request.ManagementMode,
                     CreatedOn = DateTime.UtcNow
                 };
 
@@ -326,7 +343,8 @@ namespace SDM.Infrastructure.Services
                     Email = deviceUser.Email,
                     Role = new SDM.Domain.Entities.Role { Id = Guid.NewGuid(), Name = "Device" }
                 }, expiryMinutes: 60 * 24 * 7),
-                ExpiresInSeconds = 60 * 60 * 24 * 7
+                ExpiresInSeconds = 60 * 60 * 24 * 7,
+                EnrollmentType = device.EnrollmentType
             };
         }
         catch (Exception ex)

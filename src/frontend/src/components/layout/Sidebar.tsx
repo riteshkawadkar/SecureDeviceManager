@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Smartphone, Shield, AppWindow,
-  FileBarChart, Settings, HelpCircle, LogOut, Layers, X, Users,
+  FileBarChart, Settings, HelpCircle, LogOut, Layers, X, Users, FolderKanban,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -11,6 +11,7 @@ const navItems = [
     items: [
       { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { to: '/devices', icon: Smartphone, label: 'Devices' },
+      { to: '/device-groups', icon: FolderKanban, label: 'Device Groups' },
       { to: '/policies', icon: Shield, label: 'Policies' },
       { to: '/bulk-policies', icon: Layers, label: 'Bulk Deploy' },
       { to: '/app-management', icon: AppWindow, label: 'App Management' },

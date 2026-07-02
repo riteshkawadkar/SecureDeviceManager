@@ -10,6 +10,8 @@ namespace SDM.Domain.Entities
 
         public string? Description { get; set; }
 
+        public string? Category { get; set; }
+
         public ICollection<Device> Devices { get; set; } = new List<Device>();
     }
 }

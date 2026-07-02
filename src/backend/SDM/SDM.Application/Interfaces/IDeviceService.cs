@@ -2,6 +2,7 @@ using SDM.Application.DTOs.AuditLog;
 using SDM.Application.DTOs.Command;
 using SDM.Application.DTOs.Device;
 using SDM.Domain.Entities;
+using SDM.Domain.Enums;
 
 namespace SDM.Application.Interfaces
 {
@@ -12,6 +13,8 @@ namespace SDM.Application.Interfaces
         Task UpdateHeartbeatAsync(Guid deviceId, HeartbeatRequest request);
 
         Task RegisterPushTokenAsync(Guid deviceId, string token);
+
+        Task UpdateManagementModeAsync(Guid deviceId, ManagementMode managementMode);
 
         Task<IEnumerable<Device>> GetAllAsync();
 

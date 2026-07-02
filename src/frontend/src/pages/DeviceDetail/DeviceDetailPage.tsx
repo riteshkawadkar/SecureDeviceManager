@@ -4,16 +4,19 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Lock, Trash2, RotateCw, Bell, ArrowLeft, AlertTriangle, Smartphone, ShieldCheck,
-  ChevronDown, ChevronRight, History, Layers, Zap, AppWindow,
+  ChevronDown, ChevronRight, History, Layers, Zap, AppWindow, UserCog, UserX, FolderKanban,
 } from 'lucide-react';
 import { getDevice, listViolations, listCommands, sendCommand } from '../../api/devices';
 import { getDeviceInstalledApps } from '../../api/appPackages';
-import { ComplianceBadge, LiveStatusBadge } from '../../components/ui/StatusBadge';
+import { getDeviceAssignment, assignDevice, unassignDevice } from '../../api/deviceAssignments';
+import { getDeviceGroup } from '../../api/deviceGroups';
+import { ComplianceBadge, LiveStatusBadge, EnrollmentTypeBadge, ManagementModeBadge } from '../../components/ui/StatusBadge';
 import Modal from '../../components/ui/Modal';
 import Toggle from '../../components/ui/Toggle';
 import Pagination from '../../components/ui/Pagination';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
-import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection, getIncompatiblePolicies } from '../../data/policyDefs';
+import { POLICY_DEFS, findPolicyDefForCommand, isRestrictiveDirection, getIncompatiblePolicies, DEVICE_OWNER_ONLY_COMMANDS } from '../../data/policyDefs';
+import { ManagementMode } from '../../types/device';
 import type { DeviceCommand } from '../../types/device';
 
 /** Policies that map to a single on/off command with no extra parameters — safe to flip from a switch. */
@@ -33,6 +36,11 @@ const DEVICE_COMMANDS = [
   { type: 'SendAlert', label: 'Send Alert', desc: 'Push a message to the device screen', icon: Bell },
   { type: 'WipeData', label: 'Remote Wipe', desc: 'Full factory reset — irreversible', icon: Trash2 },
 ];
+
+/** True when this command is Device-Owner-only and the device is a BYOD Work Profile (Profile Owner). */
+function isCommandBlocked(commandType: string, managementMode: ManagementMode): boolean {
+  return managementMode === ManagementMode.ProfileOwner && DEVICE_OWNER_ONLY_COMMANDS.has(commandType);
+}
 
 const HISTORY_PAGE_SIZE = 8;
 
@@ -146,6 +154,9 @@ export default function DeviceDetailPage() {
   const [alertMessage, setAlertMessage] = useState('');
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [historyPage, setHistoryPage] = useState(1);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignedTo, setAssignedTo] = useState('');
+  const [assignNotes, setAssignNotes] = useState('');
 
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
@@ -175,6 +186,34 @@ export default function DeviceDetailPage() {
     queryFn: () => getDeviceInstalledApps(id!),
   });
   const installedApps = installedAppsData?.items ?? [];
+  const { data: assignment } = useQuery({
+    queryKey: ['device-assignment', id],
+    queryFn: () => getDeviceAssignment(id!),
+    enabled: !!id,
+  });
+  const { data: group } = useQuery({
+    queryKey: ['device-group', device?.groupId],
+    queryFn: () => getDeviceGroup(device!.groupId!),
+    enabled: !!device?.groupId,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: () => assignDevice(id!, { assignedTo: assignedTo.trim(), notes: assignNotes.trim() || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['device-assignment', id] });
+      setAssignModalOpen(false);
+    },
+  });
+  const unassignMutation = useMutation({
+    mutationFn: () => unassignDevice(id!),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['device-assignment', id] }),
+  });
+
+  function openAssignModal() {
+    setAssignedTo(assignment?.assignedTo ?? '');
+    setAssignNotes(assignment?.notes ?? '');
+    setAssignModalOpen(true);
+  }
 
   // Latest known command per policy — used both for the "currently applied" card (filtered
   // below to active restrictions only) and the full Policy History table (every policy ever
@@ -325,9 +364,11 @@ export default function DeviceDetailPage() {
           <div>
             <h2 className="text-lg font-bold text-gray-900">{device.deviceIdentifier}</h2>
             <p className="text-sm text-gray-500">{device.model} · {device.androidVersion}</p>
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <LiveStatusBadge lastSeen={device.lastSeen} />
               <ComplianceBadge status={device.complianceStatus} />
+              <EnrollmentTypeBadge type={device.enrollmentType} />
+              <ManagementModeBadge mode={device.managementMode} />
             </div>
           </div>
         </div>
@@ -354,18 +395,23 @@ export default function DeviceDetailPage() {
           {DEVICE_COMMANDS.map((cmd) => {
             const Icon = cmd.icon;
             const danger = cmd.type === 'WipeData';
+            const blocked = isCommandBlocked(cmd.type, device.managementMode);
             return (
               <button
                 key={cmd.type}
-                onClick={() => runAction(cmd.type)}
+                onClick={() => !blocked && runAction(cmd.type)}
+                disabled={blocked}
+                title={blocked ? 'Requires Device Owner — unavailable on this BYOD Work Profile device' : undefined}
                 className={`w-full flex items-start gap-3 px-3.5 py-2.5 text-left transition-colors ${
-                  danger ? 'hover:bg-red-50' : 'hover:bg-gray-50'
+                  blocked ? 'opacity-40 cursor-not-allowed' : danger ? 'hover:bg-red-50' : 'hover:bg-gray-50'
                 }`}
               >
-                <Icon size={15} className={`mt-0.5 shrink-0 ${danger ? 'text-red-500' : 'text-gray-400'}`} />
+                <Icon size={15} className={`mt-0.5 shrink-0 ${danger && !blocked ? 'text-red-500' : 'text-gray-400'}`} />
                 <span className="min-w-0">
-                  <span className={`block text-sm font-medium ${danger ? 'text-red-600' : 'text-gray-800'}`}>{cmd.label}</span>
-                  <span className="block text-xs text-gray-400">{cmd.desc}</span>
+                  <span className={`block text-sm font-medium ${danger && !blocked ? 'text-red-600' : 'text-gray-800'}`}>{cmd.label}</span>
+                  <span className="block text-xs text-gray-400">
+                    {blocked ? 'Device Owner only — not available on this device' : cmd.desc}
+                  </span>
                 </span>
               </button>
             );
@@ -406,28 +452,135 @@ export default function DeviceDetailPage() {
         </Modal>
       )}
 
+      {/* Assign / Reassign modal */}
+      {assignModalOpen && (
+        <Modal title={assignment ? 'Reassign Device' : 'Assign Device'} onClose={() => setAssignModalOpen(false)}>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Assigned To</label>
+              <input
+                autoFocus
+                type="text"
+                value={assignedTo}
+                onChange={(e) => setAssignedTo(e.target.value)}
+                placeholder="Name or email"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Notes (optional)</label>
+              <textarea
+                rows={2}
+                value={assignNotes}
+                onChange={(e) => setAssignNotes(e.target.value)}
+                placeholder="e.g. Sales department, desk 12"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setAssignModalOpen(false)}
+                className="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => assignMutation.mutate()}
+                disabled={!assignedTo.trim() || assignMutation.isPending}
+                className="px-3.5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {assignMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Device Info */}
-        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Device Information</h3>
-          <dl className="space-y-3">
-            {[
-              ['Device Name', device.deviceIdentifier],
-              ['Model', device.model],
-              ['Manufacturer', device.manufacturer],
-              ['Serial Number', device.serialNumber],
-              ['OS Version', device.androidVersion],
-              ['Enrollment Date', formatDate(device.createdOn)],
-              ['Last Check-in', formatRelativeTime(device.lastSeen)],
-              ['Battery', `${device.batteryLevel ?? '—'}%`],
-              ['Assigned User', device.assignedUserName ?? '—'],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-start gap-3 sm:gap-4">
-                <dt className="text-xs text-gray-400 w-24 sm:w-32 shrink-0 pt-0.5">{label}</dt>
-                <dd className="text-sm text-gray-900 font-medium break-words min-w-0">{value}</dd>
+        <div className="space-y-5">
+          {/* Device Info */}
+          <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Device Information</h3>
+            <dl className="space-y-3">
+              {[
+                ['Device Name', device.deviceIdentifier],
+                ['Model', device.model],
+                ['Manufacturer', device.manufacturer],
+                ['Serial Number', device.serialNumber],
+                ['OS Version', device.androidVersion],
+                ['Enrollment Date', formatDate(device.createdOn)],
+                ['Last Check-in', formatRelativeTime(device.lastSeen)],
+                ['Battery', `${device.batteryLevel ?? '—'}%`],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-start gap-3 sm:gap-4">
+                  <dt className="text-xs text-gray-400 w-24 sm:w-32 shrink-0 pt-0.5">{label}</dt>
+                  <dd className="text-sm text-gray-900 font-medium break-words min-w-0">{value}</dd>
+                </div>
+              ))}
+              <div className="flex items-start gap-3 sm:gap-4">
+                <dt className="text-xs text-gray-400 w-24 sm:w-32 shrink-0 pt-0.5">Group</dt>
+                <dd className="text-sm text-gray-900 font-medium break-words min-w-0 flex items-center gap-1.5">
+                  {group ? (
+                    <>
+                      <FolderKanban size={13} className="text-gray-400 shrink-0" />
+                      {group.name}
+                      {group.category && <span className="text-xs text-gray-400 font-normal">({group.category})</span>}
+                    </>
+                  ) : '—'}
+                </dd>
               </div>
-            ))}
-          </dl>
+            </dl>
+          </div>
+
+          {/* Device Assignment */}
+          <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-700">Assignment</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={openAssignModal}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <UserCog size={13} />
+                  {assignment ? 'Reassign' : 'Assign'}
+                </button>
+                {assignment && (
+                  <button
+                    onClick={() => unassignMutation.mutate()}
+                    disabled={unassignMutation.isPending}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <UserX size={13} />
+                    Unassign
+                  </button>
+                )}
+              </div>
+            </div>
+            {assignment ? (
+              <dl className="space-y-3">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <dt className="text-xs text-gray-400 w-24 sm:w-32 shrink-0 pt-0.5">Assigned To</dt>
+                  <dd className="text-sm text-gray-900 font-medium break-words min-w-0">{assignment.assignedTo}</dd>
+                </div>
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <dt className="text-xs text-gray-400 w-24 sm:w-32 shrink-0 pt-0.5">Assigned By</dt>
+                  <dd className="text-sm text-gray-900 font-medium break-words min-w-0">{assignment.assignedBy}</dd>
+                </div>
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <dt className="text-xs text-gray-400 w-24 sm:w-32 shrink-0 pt-0.5">Assigned On</dt>
+                  <dd className="text-sm text-gray-900 font-medium break-words min-w-0">{formatDate(assignment.assignedAt)}</dd>
+                </div>
+                {assignment.notes && (
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <dt className="text-xs text-gray-400 w-24 sm:w-32 shrink-0 pt-0.5">Notes</dt>
+                    <dd className="text-sm text-gray-600 break-words min-w-0">{assignment.notes}</dd>
+                  </div>
+                )}
+              </dl>
+            ) : (
+              <p className="text-xs text-gray-400 text-center py-4">This device is not assigned to anyone yet</p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-5">
@@ -457,24 +610,29 @@ export default function DeviceDetailPage() {
                 const entry = appliedByDefId.get(def.id);
                 const isOn = entry ? isCurrentlyApplied(entry) : false;
                 const pending = pendingPolicyIds.has(def.id);
+                const blocked = !!def.binaryAction &&
+                  (isCommandBlocked(def.binaryAction.trueCmd, device.managementMode) ||
+                    isCommandBlocked(def.binaryAction.falseCmd, device.managementMode));
                 return (
                   <div
                     key={def.id}
+                    title={blocked ? 'Requires Device Owner — unavailable on this BYOD Work Profile device' : undefined}
                     className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-colors ${
-                      isOn ? 'bg-green-50' : 'bg-gray-50'
+                      blocked ? 'bg-gray-50 opacity-50' : isOn ? 'bg-green-50' : 'bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                        isOn ? 'bg-green-600' : 'bg-gray-300'
+                        isOn && !blocked ? 'bg-green-600' : 'bg-gray-300'
                       }`}>
                         <Icon size={16} className="text-white" />
                       </div>
-                      <span className={`text-sm font-semibold truncate ${isOn ? 'text-green-700' : 'text-gray-500'}`}>
+                      <span className={`text-sm font-semibold truncate ${isOn && !blocked ? 'text-green-700' : 'text-gray-500'}`}>
                         {def.label}
+                        {blocked && <span className="block text-[11px] font-normal text-gray-400">Device Owner only</span>}
                       </span>
                     </div>
-                    <Toggle checked={isOn} onChange={() => togglePolicy(def)} disabled={pending} />
+                    <Toggle checked={isOn} onChange={() => togglePolicy(def)} disabled={pending || blocked} />
                   </div>
                 );
               })}

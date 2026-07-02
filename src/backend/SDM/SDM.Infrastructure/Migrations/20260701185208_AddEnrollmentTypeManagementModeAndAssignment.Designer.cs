@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SDM.Infrastructure.Data;
@@ -11,9 +12,11 @@ using SDM.Infrastructure.Data;
 namespace SDM.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260701185208_AddEnrollmentTypeManagementModeAndAssignment")]
+    partial class AddEnrollmentTypeManagementModeAndAssignment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -513,10 +516,6 @@ namespace SDM.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ApplicableEnrollmentTypes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasColumnType("text");
@@ -551,7 +550,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000001"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "Security",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -563,7 +561,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000002"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "Security",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -575,7 +572,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000003"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "Network",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -587,7 +583,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000004"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "Network",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -599,7 +594,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000005"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "Security",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -611,7 +605,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000006"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "DeviceFeatures",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -623,7 +616,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000007"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "DeviceFeatures",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -635,7 +627,6 @@ namespace SDM.Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("a1000000-0000-0000-0000-000000000008"),
-                            ApplicableEnrollmentTypes = "Corporate,BYOD",
                             Category = "Compliance",
                             CommandType = "",
                             CreatedOn = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),

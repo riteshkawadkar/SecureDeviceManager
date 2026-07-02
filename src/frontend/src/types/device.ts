@@ -11,6 +11,17 @@ export enum ComplianceStatus {
   Pending = 3,
 }
 
+export enum EnrollmentType {
+  Corporate = 0,
+  BYOD = 1,
+}
+
+export enum ManagementMode {
+  Unknown = 0,
+  DeviceOwner = 1,
+  ProfileOwner = 2,
+}
+
 export interface Device {
   id: string;
   deviceIdentifier: string;
@@ -24,6 +35,8 @@ export interface Device {
   complianceStatus: ComplianceStatus;
   assignedUserName: string | null;
   groupId: string | null;
+  enrollmentType: EnrollmentType;
+  managementMode: ManagementMode;
   createdOn: string;
   updatedOn: string | null;
 }
@@ -54,6 +67,7 @@ export interface DeviceGroup {
   id: string;
   name: string;
   description: string | null;
+  category: string | null;
   deviceCount: number;
 }
 

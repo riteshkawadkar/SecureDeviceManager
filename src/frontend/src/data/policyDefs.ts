@@ -55,6 +55,20 @@ export type PolicyDef = {
 /** Every policy in this catalogue requires at least this — the agent's own minSdk floor. */
 export const BASELINE_ANDROID_VERSION = 'Android 7.0+ (API 24)';
 
+/**
+ * Command types the backend's CommandCapabilityValidator rejects for ManagementMode.ProfileOwner
+ * (BYOD Work Profile) devices — mirrors SDM.Application/CommandCapabilityValidator.cs exactly.
+ * Everything else (including most SetUserRestriction-backed policies) is allowed there, just
+ * scoped to the work profile rather than the whole device.
+ */
+export const DEVICE_OWNER_ONLY_COMMANDS = new Set([
+  'Reboot',
+  'EnableKiosk', 'DisableKiosk',
+  'BlockUsb', 'UnblockUsb',
+  'DisableWifi', 'EnableWifi',
+  'DisableBluetooth', 'EnableBluetooth',
+]);
+
 export const POLICY_DEFS: PolicyDef[] = [
   // ── Security ────────────────────────────────────────────────────────────────
   {

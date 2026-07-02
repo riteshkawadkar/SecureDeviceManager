@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using SDM.Application;
 using SDM.Application.DTOs.Command;
+using SDM.Application.Exceptions;
 using SDM.Application.Interfaces;
 using SDM.Domain.Entities;
 using SDM.Domain;
@@ -22,6 +24,9 @@ namespace SDM.Infrastructure.Services
         {
             var device = await _db.Devices.FindAsync(deviceId);
             if (device == null) throw new Exception("Device not found");
+
+            if (!CommandCapabilityValidator.IsSupported(commandType, device.ManagementMode))
+                throw new CommandNotSupportedException(commandType, device.ManagementMode);
 
             var cmd = new DeviceCommand
             {

@@ -16,6 +16,13 @@ namespace SDM.Application
         /// <summary>[Device Owner] Factory-reset the device. Payload: (none). Agent has this disabled by default for safety.</summary>
         public const string WipeData = "WipeData";
 
+        /// <summary>[Device Owner] Reboot the device. Payload: (none)</summary>
+        public const string Reboot = "Reboot";
+
+        // ── Alerts ─────────────────────────────────────────────────────────────
+        /// <summary>[Device Admin] Push an alert notification to the device. Payload: {"message":"..."}</summary>
+        public const string SendAlert = "SendAlert";
+
         // ── App visibility ─────────────────────────────────────────────────────
         /// <summary>[Device Owner] Hide an app. Payload: {"packageName":"com.example.app"}</summary>
         public const string DisableApp = "DisableApp";
@@ -86,5 +93,13 @@ namespace SDM.Application
         /// Supports Chrome URL filter pattern syntax. Replaces any previous policy on each call.
         /// </summary>
         public const string SetWebRestrictions = "SetWebRestrictions";
+
+        // ── User restrictions ──────────────────────────────────────────────────
+        /// <summary>
+        /// [Device Admin] Toggle a single DevicePolicyManager user restriction. On Profile Owner
+        /// devices only the restrictions applicable to the work profile take effect.
+        /// Payload: {"restriction":"no_usb_file_transfer","enabled":true}
+        /// </summary>
+        public const string SetUserRestriction = "SetUserRestriction";
     }
 }

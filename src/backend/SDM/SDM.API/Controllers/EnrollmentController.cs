@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using SDM.Application.DTOs.Enrollment;
 using SDM.Domain.Constants;
+using SDM.Domain.Enums;
 using SDM.Infrastructure.Data;
 
 namespace SDM.API.Controllers
@@ -41,6 +42,63 @@ namespace SDM.API.Controllers
             if (!System.IO.File.Exists(apkPath))
                 return NotFound(new { error = "Agent APK not found. Place the APK at uploads/agent.apk on the server." });
             return PhysicalFile(apkPath, "application/vnd.android.package-archive", "sdm-agent.apk");
+        }
+
+        // SHA-256 of the APK, URL-safe Base64 without padding — the encoding Android's
+        // Setup Wizard expects for EXTRA_PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM.
+        private static string ComputeApkChecksum(string apkPath)
+        {
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            using var stream = System.IO.File.OpenRead(apkPath);
+            var hash = sha256.ComputeHash(stream);
+            return Convert.ToBase64String(hash).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+        }
+
+        // Corporate zero-touch/OOBE Device Owner provisioning QR. Scanned from the Android
+        // Setup Wizard (before any account/app exists on the device) — it downloads the agent
+        // APK, verifies its checksum, installs it, and sets it as Device Owner, then hands the
+        // enrollment token + server URL to AdminReceiver.onProfileProvisioningComplete via
+        // PROVISIONING_ADMIN_EXTRAS_BUNDLE so the agent can self-register with no prior UI.
+        [HttpGet("tokens/{id}/qr")]
+        public async Task<IActionResult> GetTokenOobeQr(Guid id, [FromQuery] string type)
+        {
+            if (!string.Equals(type, "corporate-oobe", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Only type=corporate-oobe is currently supported." });
+
+            var token = await _db.EnrollmentTokens.FindAsync(id);
+            if (token == null)
+                return NotFound(new { error = "Enrollment token not found." });
+            if (token.EnrollmentType != EnrollmentType.Corporate)
+                return BadRequest(new { error = "Corporate OOBE QR is only valid for Corporate enrollment tokens." });
+            if (!token.IsActive || token.ExpiresOn < DateTime.UtcNow)
+                return BadRequest(new { error = "Enrollment token is inactive or expired." });
+
+            var apkPath = Path.Combine(_env.ContentRootPath, "uploads", "agent.apk");
+            if (!System.IO.File.Exists(apkPath))
+                return NotFound(new { error = "Agent APK not found. Place the APK at uploads/agent.apk on the server before generating an OOBE QR." });
+
+            var checksum = ComputeApkChecksum(apkPath);
+            var baseUrl = $"{Request.Scheme}://{Request.Host.Value}";
+
+            var payload = new Dictionary<string, object>
+            {
+                ["android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME"] = "com.example.sdmagent/.AdminReceiver",
+                ["android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION"] = $"{baseUrl}/api/enrollment/agent-apk",
+                ["android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM"] = checksum,
+                ["android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE"] = new Dictionary<string, object>
+                {
+                    ["enrollment_token"] = token.Token,
+                    ["server_url"] = baseUrl + "/"
+                }
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(payload);
+
+            using var qrGenerator = new QRCoder.QRCodeGenerator();
+            var qrData = qrGenerator.CreateQrCode(json, QRCoder.QRCodeGenerator.ECCLevel.Q);
+            using var qrCode = new QRCoder.PngByteQRCode(qrData);
+            var qrBytes = qrCode.GetGraphic(20);
+            return File(qrBytes, "image/png", "corporate-oobe-qr.png");
         }
 
         // Simple web enrollment page rendering minimal HTML form for device/browser enrollment
@@ -102,6 +160,7 @@ namespace SDM.API.Controllers
                 t.ExpiresOn,
                 t.MaxDevices,
                 t.IsActive,
+                t.EnrollmentType,
                 IsExpired = t.ExpiresOn < DateTime.UtcNow
             }));
         }
@@ -115,7 +174,8 @@ namespace SDM.API.Controllers
                 Token = GenerateFriendlyToken(),
                 ExpiresOn = DateTime.UtcNow.AddMinutes(request.ExpiresInMinutes),
                 MaxDevices = request.MaxDevices,
-                IsActive = true
+                IsActive = true,
+                EnrollmentType = request.EnrollmentType
             };
 
             _db.EnrollmentTokens.Add(token);
@@ -138,7 +198,8 @@ namespace SDM.API.Controllers
                 Token = GenerateFriendlyToken(),
                 ExpiresOn = DateTime.UtcNow.AddMinutes(request.ExpiresInMinutes),
                 MaxDevices = request.MaxDevices,
-                IsActive = true
+                IsActive = true,
+                EnrollmentType = request.EnrollmentType
             };
 
             _db.EnrollmentTokens.Add(token);
@@ -169,7 +230,8 @@ namespace SDM.API.Controllers
                 Token = GenerateFriendlyToken(),
                 ExpiresOn = DateTime.UtcNow.AddMinutes(request.ExpiresInMinutes),
                 MaxDevices = request.MaxDevices,
-                IsActive = true
+                IsActive = true,
+                EnrollmentType = request.EnrollmentType
             };
 
             _db.EnrollmentTokens.Add(token);

@@ -1,4 +1,5 @@
 using SDM.Domain;
+using SDM.Domain.Enums;
 
 namespace SDM.Domain.Entities
 {
@@ -26,6 +27,10 @@ namespace SDM.Domain.Entities
 
         public string? AssignedUserName { get; set; }
 
+        public EnrollmentType EnrollmentType { get; set; } = EnrollmentType.Corporate;
+
+        public ManagementMode ManagementMode { get; set; } = ManagementMode.Unknown;
+
         public ComplianceStatus ComplianceStatus { get; set; } = ComplianceStatus.Unknown;
 
         public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
@@ -39,5 +44,7 @@ namespace SDM.Domain.Entities
         public ICollection<DevicePushToken> PushTokens { get; set; } = new List<DevicePushToken>();
 
         public ICollection<DeviceViolation> Violations { get; set; } = new List<DeviceViolation>();
+
+        public DeviceAssignment? Assignment { get; set; }
     }
 }

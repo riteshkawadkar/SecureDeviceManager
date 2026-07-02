@@ -1,4 +1,5 @@
 using System;
+using SDM.Domain.Enums;
 
 namespace SDM.Domain.Entities
 {
@@ -13,5 +14,7 @@ namespace SDM.Domain.Entities
         public int MaxDevices { get; set; } = 1;
 
         public bool IsActive { get; set; } = true;
+
+        public EnrollmentType EnrollmentType { get; set; } = EnrollmentType.Corporate;
     }
 }
